@@ -85,6 +85,7 @@
   .blank.filled { border-style: solid; background: var(--good-soft); border-color: var(--good); color: var(--good); }
 
   .frame { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 300px; margin: 18px auto 0; }
+  .frame[hidden] { display: none; }
   .frame i {
     aspect-ratio: 1; border-radius: 50%; background: var(--dot-empty);
     border: 3px dashed var(--dot-line); transition: background .3s, border-color .3s;
@@ -272,6 +273,7 @@
     blankEl.textContent = '?';
     blankEl.classList.remove('filled');
     renderFrame(n, false);
+    frameEl.hidden = correct >= 5; // 後半5問は丸なし（数えずに考える）
     msgEl.textContent = 'いくつ たしたら 10 になるかな？';
     msgEl.className = 'message';
 
