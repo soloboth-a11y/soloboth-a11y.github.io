@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>10をつくろう</title>
+<style>
+  :root {
+    --bg: #fff8e7;
+    --card: #ffffff;
+    --ink: #3b3355;
+    --sub: #8a83a3;
+    --accent: #ff8a5b;
+    --accent-dark: #e86a3a;
+    --good: #3cc47c;
+    --bad: #ff5b6e;
+    --dot: #ff8a5b;
+    --dot-empty: #efe9f7;
+    --track: #f1ecdf;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Maru Gothic ProN", "Rounded Mplus 1c", "M PLUS Rounded 1c", "Yu Gothic", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 16px; user-select: none;
+  }
+  header { width: 100%; max-width: 520px; display: flex; justify-content: space-between; align-items: center; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: .05em; }
+  .book-btn {
+    border: none; background: var(--card); color: var(--ink); font: inherit; font-size: 16px;
+    padding: 8px 14px; border-radius: 999px; box-shadow: 0 2px 0 #e6dcc4; cursor: pointer;
+  }
+  main { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+
+  .progress { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
+  .progress span {
+    aspect-ratio: 1; border-radius: 50%; background: var(--track);
+    display: grid; place-items: center; font-size: clamp(14px, 4.5vw, 24px);
+    transition: transform .3s;
+  }
+  .progress span.on { background: #ffe27a; transform: scale(1.1); }
+
+  .card {
+    background: var(--card); border-radius: 28px; padding: 24px 16px;
+    box-shadow: 0 4px 0 #e6dcc4; text-align: center;
+  }
+  .equation { font-size: clamp(48px, 16vw, 84px); font-weight: 800; display: flex; justify-content: center; align-items: center; gap: .25em; }
+  .blank {
+    display: inline-grid; place-items: center; min-width: 1.3em; height: 1.3em;
+    border: 4px dashed var(--accent); border-radius: 18px; color: var(--accent);
+  }
+  .blank.filled { border-style: solid; background: #e8fbf1; border-color: var(--good); color: var(--good); }
+
+  .frame { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 300px; margin: 18px auto 0; }
+  .frame i {
+    aspect-ratio: 1; border-radius: 50%; background: var(--dot-empty);
+    border: 3px dashed #d8cfe8; transition: background .3s, border-color .3s;
+  }
+  .frame i.on { background: var(--dot); border: 3px solid var(--dot); }
+  .frame i.add { background: var(--good); border: 3px solid var(--good); }
+
+  .choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .choices button {
+    font: inherit; font-size: clamp(40px, 12vw, 60px); font-weight: 800; color: var(--ink);
+    background: var(--card); border: none; border-radius: 24px; padding: 14px 0;
+    box-shadow: 0 6px 0 #e6dcc4; cursor: pointer; transition: transform .08s;
+  }
+  .choices button:active { transform: translateY(4px); box-shadow: 0 2px 0 #e6dcc4; }
+  .choices button.wrong { background: #ffe3e7; color: var(--bad); animation: shake .4s; }
+  .choices button.right { background: var(--good); color: #fff; box-shadow: 0 6px 0 #2a9a5f; }
+  .choices button:disabled { cursor: default; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+
+  .message { text-align: center; font-size: 22px; min-height: 1.5em; font-weight: 700; }
+  .message.good { color: var(--good); }
+  .message.bad { color: var(--bad); }
+
+  /* overlays */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(59, 51, 85, .55);
+    display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10;
+  }
+  .overlay.show { display: flex; }
+  .panel {
+    background: var(--card); border-radius: 28px; padding: 24px 20px; width: 100%; max-width: 420px;
+    text-align: center; max-height: 90vh; overflow-y: auto;
+  }
+  .panel h2 { margin: 0 0 8px; font-size: 26px; }
+  .sticker-big {
+    font-size: 120px; line-height: 1; margin: 12px 0;
+    animation: pop .7s cubic-bezier(.2, 1.6, .4, 1);
+  }
+  @keyframes pop { 0%{transform:scale(0) rotate(-30deg)} 100%{transform:scale(1) rotate(0)} }
+  .primary {
+    font: inherit; font-size: 22px; font-weight: 800; color: #fff; background: var(--accent);
+    border: none; border-radius: 999px; padding: 12px 32px; box-shadow: 0 5px 0 var(--accent-dark);
+    cursor: pointer; margin-top: 12px;
+  }
+  .primary:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--accent-dark); }
+  .book { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 16px 0; }
+  .book div {
+    aspect-ratio: 1; border-radius: 16px; background: var(--track);
+    display: grid; place-items: center; font-size: 34px;
+  }
+  .book div.empty { color: #d6ccb4; font-size: 20px; }
+  .sub { color: var(--sub); font-size: 15px; }
+
+  .confetti { position: fixed; top: -40px; font-size: 28px; pointer-events: none; z-index: 20; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>10をつくろう</h1>
+  <button class="book-btn" id="bookBtn">📒 シール <span id="stickerCount">0</span></button>
+</header>
+
+<main>
+  <div class="progress" id="progress"></div>
+
+  <div class="card">
+    <div class="equation">
+      <span id="num">3</span><span>+</span><span class="blank" id="blank">?</span><span>=</span><span>10</span>
+    </div>
+    <div class="frame" id="frame"></div>
+  </div>
+
+  <div class="message" id="message">いくつ たしたら 10 になるかな？</div>
+
+  <div class="choices" id="choices"></div>
+</main>
+
+<div class="overlay" id="rewardOverlay">
+  <div class="panel">
+    <h2>10かい せいかい！</h2>
+    <div class="sub">シールを もらったよ</div>
+    <div class="sticker-big" id="rewardSticker">⭐</div>
+    <button class="primary" id="againBtn">もういちど</button>
+  </div>
+</div>
+
+<div class="overlay" id="bookOverlay">
+  <div class="panel">
+    <h2>📒 シールちょう</h2>
+    <div class="sub" id="bookInfo"></div>
+    <div class="book" id="book"></div>
+    <button class="primary" id="closeBook">とじる</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const GOAL = 10;
+  const STICKERS = ['🐶','🐱','🐰','🐼','🐨','🦁','🐸','🐧','🐥','🦄','🐳','🐬','🦋','🐞','🌻','🌈','🍓','🍩','🍦','🚀','🚂','🚗','⚽','🎈','🎁','👑','💎','🌟','🍀','🦖'];
+  const STORE_KEY = 'make10.stickers';
+
+  const $ = id => document.getElementById(id);
+  const progressEl = $('progress'), numEl = $('num'), blankEl = $('blank'), frameEl = $('frame');
+  const msgEl = $('message'), choicesEl = $('choices');
+
+  let correct = 0, current = null, last = null, locked = false;
+
+  // ---------- storage ----------
+  function loadStickers() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; }
+  }
+  function saveStickers(list) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch {}
+  }
+  let stickers = loadStickers();
+  function updateCount() { $('stickerCount').textContent = stickers.length; }
+
+  // ---------- sound ----------
+  let ctx = null;
+  function tone(freq, start, dur, type = 'sine', vol = 0.2) {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, ctx.currentTime + start);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + start); o.stop(ctx.currentTime + start + dur);
+    } catch {}
+  }
+  const sfx = {
+    good: () => { tone(784, 0, .15); tone(1047, .1, .25); },
+    bad:  () => { tone(220, 0, .25, 'triangle', .25); },
+    win:  () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * .12, .3, 'triangle')),
+  };
+
+  // ---------- rendering ----------
+  function renderProgress() {
+    progressEl.innerHTML = '';
+    for (let i = 0; i < GOAL; i++) {
+      const s = document.createElement('span');
+      if (i < correct) { s.className = 'on'; s.textContent = '⭐'; }
+      progressEl.appendChild(s);
+    }
+  }
+
+  function renderFrame(n, filled) {
+    frameEl.innerHTML = '';
+    for (let i = 0; i < 10; i++) {
+      const d = document.createElement('i');
+      if (i < n) d.className = 'on';
+      else if (filled) d.className = 'add';
+      frameEl.appendChild(d);
+    }
+  }
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function nextQuestion() {
+    let n;
+    do { n = Math.floor(Math.random() * 11); } while (n === last); // 0〜10
+    last = n;
+    current = n;
+    const answer = 10 - n;
+
+    // 選択肢: 正解 + 近い数を中心に3つ
+    const opts = new Set([answer]);
+    const near = shuffle([answer - 1, answer + 1, answer - 2, answer + 2].filter(x => x >= 0 && x <= 10));
+    for (const x of near) { if (opts.size < 4) opts.add(x); }
+    while (opts.size < 4) opts.add(Math.floor(Math.random() * 11));
+
+    numEl.textContent = n;
+    blankEl.textContent = '?';
+    blankEl.classList.remove('filled');
+    renderFrame(n, false);
+    msgEl.textContent = 'いくつ たしたら 10 になるかな？';
+    msgEl.className = 'message';
+
+    choicesEl.innerHTML = '';
+    shuffle([...opts]).forEach(v => {
+      const b = document.createElement('button');
+      b.textContent = v;
+      b.addEventListener('click', () => choose(b, v));
+      choicesEl.appendChild(b);
+    });
+    locked = false;
+  }
+
+  function choose(btn, v) {
+    if (locked || btn.classList.contains('wrong')) return;
+    if (current + v === 10) {
+      locked = true;
+      btn.classList.add('right');
+      choicesEl.querySelectorAll('button').forEach(b => b.disabled = true);
+      blankEl.textContent = v;
+      blankEl.classList.add('filled');
+      renderFrame(current, true);
+      msgEl.textContent = ['せいかい！', 'すごい！', 'やったね！', 'ばっちり！'][Math.floor(Math.random() * 4)];
+      msgEl.className = 'message good';
+      sfx.good();
+      correct++;
+      renderProgress();
+      setTimeout(() => correct >= GOAL ? giveSticker() : nextQuestion(), 1100);
+    } else {
+      btn.classList.add('wrong');
+      msgEl.textContent = 'おしい！ もういちど';
+      msgEl.className = 'message bad';
+      sfx.bad();
+    }
+  }
+
+  // ---------- reward ----------
+  function giveSticker() {
+    const owned = new Set(stickers);
+    const fresh = STICKERS.filter(s => !owned.has(s));
+    const pool = fresh.length ? fresh : STICKERS;
+    const s = pool[Math.floor(Math.random() * pool.length)];
+    stickers.push(s);
+    saveStickers(stickers);
+    updateCount();
+    $('rewardSticker').textContent = s;
+    $('rewardOverlay').classList.add('show');
+    sfx.win();
+    confetti();
+  }
+
+  function confetti() {
+    const items = ['🎉', '⭐', '✨', '🎊', '💖'];
+    for (let i = 0; i < 30; i++) {
+      const c = document.createElement('div');
+      c.className = 'confetti';
+      c.textContent = items[i % items.length];
+      c.style.left = Math.random() * 100 + 'vw';
+      c.style.animationDuration = 2 + Math.random() * 2 + 's';
+      c.style.animationDelay = Math.random() * .6 + 's';
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 5000);
+    }
+  }
+
+  $('againBtn').addEventListener('click', () => {
+    $('rewardOverlay').classList.remove('show');
+    correct = 0;
+    renderProgress();
+    nextQuestion();
+  });
+
+  // ---------- sticker book ----------
+  function openBook() {
+    const book = $('book');
+    book.innerHTML = '';
+    const total = Math.max(STICKERS.length, Math.ceil(stickers.length / 5) * 5);
+    for (let i = 0; i < total; i++) {
+      const d = document.createElement('div');
+      if (i < stickers.length) d.textContent = stickers[i];
+      else { d.className = 'empty'; d.textContent = '・'; }
+      book.appendChild(d);
+    }
+    $('bookInfo').textContent = stickers.length
+      ? `${stickers.length}まい あつめたよ！`
+      : 'まだ シールが ないよ。10かい せいかいすると もらえるよ！';
+    $('bookOverlay').classList.add('show');
+  }
+  $('bookBtn').addEventListener('click', openBook);
+  $('closeBook').addEventListener('click', () => $('bookOverlay').classList.remove('show'));
+
+  updateCount();
+  renderProgress();
+  nextQuestion();
+})();
+</script>
+</body>
+</html>
