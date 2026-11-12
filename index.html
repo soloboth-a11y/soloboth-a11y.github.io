@@ -136,6 +136,9 @@
     aspect-ratio: 1; border-radius: 16px; background: var(--track);
     display: grid; place-items: center; font-size: 34px;
   }
+  .sticker-big img { width: 160px; height: 160px; max-width: 100%; object-fit: contain; display: block; margin: 0 auto; }
+  .book div { overflow: hidden; }
+  .book div img { width: 85%; height: 85%; object-fit: contain; }
   .book div.empty { color: var(--muted); font-size: 20px; }
   button:focus-visible { outline: 4px solid var(--accent); outline-offset: 3px; }
   @media (prefers-reduced-motion: reduce) {
@@ -190,8 +193,33 @@
 <script>
 (() => {
   const GOAL = 10;
-  const STICKERS = ['🐶','🐱','🐰','🐼','🐨','🦁','🐸','🐧','🐥','🦄','🐳','🐬','🦋','🐞','🌻','🌈','🍓','🍩','🍦','🚀','🚂','🚗','⚽','🎈','🎁','👑','💎','🌟','🍀','🦖'];
+  // stickers/ フォルダに画像があればそれを使い、なければ絵文字を使う
+  const EMOJI_STICKERS = ['🐶','🐱','🐰','🐼','🐨','🦁','🐸','🐧','🐥','🦄','🐳','🐬','🦋','🐞','🌻','🌈','🍓','🍩','🍦','🚀','🚂','🚗','⚽','🎈','🎁','👑','💎','🌟','🍀','🦖'];
+  let STICKERS = EMOJI_STICKERS;
+  const STICKER_DIR = 'stickers/';
   const STORE_KEY = 'make10.stickers';
+
+  async function loadStickerImages() {
+    try {
+      const res = await fetch(STICKER_DIR + 'stickers.json', { cache: 'no-cache' });
+      if (!res.ok) return;
+      const files = await res.json();
+      if (Array.isArray(files) && files.length) STICKERS = files.map(f => 'img:' + f);
+    } catch {}
+  }
+
+  // シール1まいを要素に表示する（画像なら <img>、絵文字ならそのまま）
+  function showSticker(el, s) {
+    el.textContent = '';
+    if (s.startsWith('img:')) {
+      const img = document.createElement('img');
+      img.src = STICKER_DIR + encodeURIComponent(s.slice(4));
+      img.alt = 'シール';
+      el.appendChild(img);
+    } else {
+      el.textContent = s;
+    }
+  }
 
   const $ = id => document.getElementById(id);
   const progressEl = $('progress'), numEl = $('num'), blankEl = $('blank'), frameEl = $('frame');
@@ -325,7 +353,7 @@
     stickers.push(s);
     saveStickers(stickers);
     updateCount();
-    $('rewardSticker').textContent = s;
+    showSticker($('rewardSticker'), s);
     $('rewardOverlay').classList.add('show');
     sfx.win();
     confetti();
@@ -359,7 +387,7 @@
     const total = Math.max(STICKERS.length, Math.ceil(stickers.length / 5) * 5);
     for (let i = 0; i < total; i++) {
       const d = document.createElement('div');
-      if (i < stickers.length) d.textContent = stickers[i];
+      if (i < stickers.length) showSticker(d, stickers[i]);
       else { d.className = 'empty'; d.textContent = '・'; }
       book.appendChild(d);
     }
@@ -374,6 +402,7 @@
   updateCount();
   renderProgress();
   nextQuestion();
+  loadStickerImages();
 })();
 </script>
 </body>

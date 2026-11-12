@@ -1,0 +1,44 @@
+# サイトを GitHub Pages に公開する。
+# 公開の前に stickers/ フォルダの画像一覧（stickers.json）を作るので、
+# 画像を入れてプッシュするだけでシールに加わる。
+name: Publish site
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # 既定ブランチへのプッシュ（または手動実行）のときだけ公開する
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build sticker list
+        run: node tools/build-stickers.mjs
+      - name: Collect site files
+        run: |
+          mkdir _site
+          cp index.html _site/
+          cp -r stickers _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
