@@ -345,11 +345,27 @@
   }
 
   // ---------- reward ----------
+  // ファイル名の先頭が「数字2桁_」ならレア度（例: 03_ねこ.png → レア度3）。
+  // レア度が大きいほど出にくい（出やすさ = 1 / レア度）。数字がないものはレア度1。
+  function rarityOf(s) {
+    const m = s.startsWith('img:') && s.slice(4).match(/^(\d{2})_/);
+    return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+  }
+  function pickWeighted(pool) {
+    const weights = pool.map(s => 1 / rarityOf(s));
+    let r = Math.random() * weights.reduce((x, y) => x + y, 0);
+    for (let i = 0; i < pool.length; i++) {
+      r -= weights[i];
+      if (r < 0) return pool[i];
+    }
+    return pool[pool.length - 1];
+  }
+
   function giveSticker() {
     const owned = new Set(stickers);
     const fresh = STICKERS.filter(s => !owned.has(s));
     const pool = fresh.length ? fresh : STICKERS;
-    const s = pool[Math.floor(Math.random() * pool.length)];
+    const s = pickWeighted(pool);
     stickers.push(s);
     saveStickers(stickers);
     updateCount();
