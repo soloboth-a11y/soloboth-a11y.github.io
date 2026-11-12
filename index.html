@@ -287,6 +287,12 @@
     locked = false;
   }
 
+  // ときどき（3回に1回くらい）名前をつける
+  const NAME = '花ちゃん';
+  function withName(text) {
+    return Math.random() < 1 / 3 ? `${NAME}、${text}` : text;
+  }
+
   function choose(btn, v) {
     if (locked || btn.classList.contains('wrong')) return;
     if (current + v === 10) {
@@ -296,7 +302,7 @@
       blankEl.textContent = v;
       blankEl.classList.add('filled');
       renderFrame(current, true);
-      msgEl.textContent = ['せいかい！', 'すごい！', 'やったね！', 'ばっちり！'][Math.floor(Math.random() * 4)];
+      msgEl.textContent = withName(['せいかい！', 'すごい！', 'やったね！', 'ばっちり！'][Math.floor(Math.random() * 4)]);
       msgEl.className = 'message good';
       sfx.good();
       correct++;
@@ -304,7 +310,7 @@
       setTimeout(() => correct >= GOAL ? giveSticker() : nextQuestion(), 1100);
     } else {
       btn.classList.add('wrong');
-      msgEl.textContent = 'おしい！ もういちど';
+      msgEl.textContent = withName('おしい！ もういちど');
       msgEl.className = 'message bad';
       sfx.bad();
     }
