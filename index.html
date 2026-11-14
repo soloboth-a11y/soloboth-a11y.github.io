@@ -149,25 +149,80 @@
 
   .confetti { position: fixed; top: -40px; font-size: 28px; pointer-events: none; z-index: 20; animation: fall linear forwards; }
   @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
+
+  [hidden] { display: none !important; }
+  header .left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  header h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 20px; }
+  .book-btn { white-space: nowrap; flex-shrink: 0; }
+  .back-btn {
+    border: none; background: var(--card); color: var(--ink); font: inherit; font-size: 16px; font-weight: 700;
+    padding: 6px 14px; font-size: 20px; border-radius: 999px; box-shadow: 0 2px 0 var(--shadow); cursor: pointer; white-space: nowrap;
+  }
+
+  /* menu */
+  .menu-title { font-size: 20px; font-weight: 800; margin: 4px 0 0; text-align: center; }
+  .kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .kind {
+    font: inherit; font-size: 15px; font-weight: 800; color: var(--ink); background: var(--card);
+    border: none; border-radius: 20px; padding: 12px 4px; box-shadow: 0 4px 0 var(--shadow); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .kind b { font-size: 34px; line-height: 1.1; }
+  .kind[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 0 var(--accent-dark); }
+  .levels { display: flex; flex-direction: column; gap: 12px; }
+  .level {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px;
+    font: inherit; color: var(--ink); text-align: left; background: var(--card); border: none;
+    border-radius: 22px; padding: 14px 16px; box-shadow: 0 5px 0 var(--shadow); cursor: pointer;
+  }
+  .level:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--shadow); }
+  .level .lv { font-size: 18px; font-weight: 800; white-space: nowrap; color: var(--accent); }
+  .level .body { min-width: 0; }
+  .level .ex { font-size: 22px; font-weight: 800; white-space: nowrap; }
+  .level .desc { font-size: 13px; color: var(--sub); }
+  .level .reward { font-size: 12px; color: var(--sub); text-align: center; white-space: nowrap; }
+  .level .reward span { display: block; font-size: 16px; letter-spacing: -2px; }
+
+  .equation { flex-wrap: wrap; }
+  .equation.long { font-size: clamp(28px, 8.5vw, 56px); gap: .18em; }
+  .blank { padding: 0 .12em; }
+
+  .reward-stickers { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 12px 0; }
+  .reward-stickers .sticker-big { margin: 0; animation-fill-mode: both; }
+  .reward-stickers.many .sticker-big { font-size: 56px; }
+  .reward-stickers.many .sticker-big img { width: 64px; height: 64px; }
+  .reward-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+  .secondary {
+    font: inherit; font-size: 18px; font-weight: 800; color: var(--ink); background: var(--track);
+    border: none; border-radius: 999px; padding: 12px 24px; box-shadow: 0 5px 0 var(--shadow);
+    cursor: pointer; margin-top: 12px;
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>10をつくろう</h1>
+  <div class="left">
+    <button class="back-btn" id="backBtn" aria-label="メニューに もどる" hidden>←</button>
+    <h1 id="title">けいさん れんしゅう</h1>
+  </div>
   <button class="book-btn" id="bookBtn">📒 シール <span id="stickerCount">0</span></button>
 </header>
 
-<main>
+<main id="menu">
+  <p class="menu-title">どれに する？</p>
+  <div class="kinds" id="kinds"></div>
+  <div class="levels" id="levels"></div>
+</main>
+
+<main id="game" hidden>
   <div class="progress" id="progress"></div>
 
   <div class="card">
-    <div class="equation">
-      <span id="num">3</span><span>+</span><span class="blank" id="blank">?</span><span>=</span><span>10</span>
-    </div>
+    <div class="equation" id="equation"></div>
     <div class="frame" id="frame"></div>
   </div>
 
-  <div class="message" id="message">いくつ たしたら 10 になるかな？</div>
+  <div class="message" id="message"></div>
 
   <div class="choices" id="choices"></div>
 </main>
@@ -175,9 +230,12 @@
 <div class="overlay" id="rewardOverlay">
   <div class="panel">
     <h2>花ちゃん、<br>10かい せいかい！</h2>
-    <div class="sub">シールを もらったよ</div>
-    <div class="sticker-big" id="rewardSticker">⭐</div>
-    <button class="primary" id="againBtn">もういちど</button>
+    <div class="sub" id="rewardInfo">シールを もらったよ</div>
+    <div class="reward-stickers" id="rewardStickers"></div>
+    <div class="reward-actions">
+      <button class="primary" id="againBtn">もういちど</button>
+      <button class="secondary" id="menuBtn">メニューへ</button>
+    </div>
   </div>
 </div>
 
@@ -192,12 +250,82 @@
 
 <script>
 (() => {
-  const GOAL = 10;
+  const GOAL = 10;          // 10かい せいかいで シール
+  const MINUS = '−';
+  const BLANK = null;       // しきの中の「?」
+
+  // ---------- もんだいの しゅるいと レベル ----------
+  const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
+  const sum = a => a.reduce((x, y) => x + y, 0);
+
+  // たしざん: すべての数が 1〜9（レベル2だけ はじめの数が 19まで）
+  function makeAdd(level) {
+    for (;;) {
+      let nums;
+      if (level === 1) { const a = rand(1, 9); nums = [a, rand(1, 10 - a)]; if (sum(nums) > 10) continue; }
+      else if (level === 2) { nums = [rand(1, 19), rand(1, 9)]; const t = sum(nums); if (t < 11 || t > 20) continue; }
+      else { nums = Array.from({ length: level }, () => rand(1, 9)); if (sum(nums) > 20) continue; }
+      return { nums, op: '+', answer: sum(nums) };
+    }
+  }
+  // ひきざん: とちゅうの こたえも 0より 小さくならない
+  function makeSub(level) {
+    for (;;) {
+      let nums;
+      if (level === 1) { const a = rand(2, 10); nums = [a, rand(1, a)]; }
+      else if (level === 2) { nums = [rand(11, 20), rand(1, 9)]; }
+      else { nums = [rand(10, 20), ...Array.from({ length: level - 1 }, () => rand(1, 9))]; }
+      const answer = nums[0] - sum(nums.slice(1));
+      if (answer < 0) continue;
+      return { nums, op: MINUS, answer };
+    }
+  }
+  const asParts = q => [...q.nums.flatMap((n, i) => i ? [q.op, n] : [n]), '=', BLANK];
+
+  const KINDS = {
+    make10: {
+      label: '10を つくろう', icon: '10',
+      levels: [{ ex: `3 + ? = 10`, desc: 'たして 10に なる数' }],
+    },
+    add: {
+      label: 'たしざん', icon: '+',
+      levels: [
+        { ex: '3 + 4', desc: 'こたえ 10まで' },
+        { ex: '8 + 5', desc: 'こたえ 20まで' },
+        { ex: '4 + 3 + 6', desc: '2かい たす（20まで）' },
+        { ex: '2 + 5 + 3 + 6', desc: '3かい たす（20まで）' },
+      ],
+    },
+    sub: {
+      label: 'ひきざん', icon: MINUS,
+      levels: [
+        { ex: `9 ${MINUS} 4`, desc: '10までの 数から ひく' },
+        { ex: `15 ${MINUS} 7`, desc: '20までの 数から ひく' },
+        { ex: `17 ${MINUS} 5 ${MINUS} 3`, desc: '2かい ひく' },
+        { ex: `19 ${MINUS} 4 ${MINUS} 6 ${MINUS} 2`, desc: '3かい ひく' },
+      ],
+    },
+  };
+
+  function makeQuestion(kind, level, index) {
+    if (kind === 'make10') {
+      const n = rand(0, 10);
+      return { key: 'm' + n, parts: [n, '+', BLANK, '=', 10], answer: 10 - n, max: 10,
+               dots: index < 5 ? n : null, // 前半5問だけ 丸を出す
+               prompt: 'いくつ たしたら 10 になるかな？' };
+    }
+    const q = kind === 'add' ? makeAdd(level) : makeSub(level);
+    return { key: q.nums.join(q.op), parts: asParts(q), answer: q.answer, max: level === 1 ? 10 : 20,
+             dots: null, prompt: 'こたえは いくつかな？' };
+  }
+
+  // ---------- シール ----------
   // stickers/ フォルダに画像があればそれを使い、なければ絵文字を使う
   const EMOJI_STICKERS = ['🐶','🐱','🐰','🐼','🐨','🦁','🐸','🐧','🐥','🦄','🐳','🐬','🦋','🐞','🌻','🌈','🍓','🍩','🍦','🚀','🚂','🚗','⚽','🎈','🎁','👑','💎','🌟','🍀','🦖'];
   let STICKERS = EMOJI_STICKERS;
   const STICKER_DIR = 'stickers/';
   const STORE_KEY = 'make10.stickers';
+  const KIND_KEY = 'make10.kind';
 
   async function loadStickerImages() {
     try {
@@ -222,19 +350,20 @@
   }
 
   const $ = id => document.getElementById(id);
-  const progressEl = $('progress'), numEl = $('num'), blankEl = $('blank'), frameEl = $('frame');
+  const progressEl = $('progress'), equationEl = $('equation'), frameEl = $('frame');
   const msgEl = $('message'), choicesEl = $('choices');
 
-  let correct = 0, current = null, last = null, locked = false;
+  let kind = 'make10', level = 1;
+  let correct = 0, current = null, lastKey = null, locked = false, blankEl = null;
 
   // ---------- storage ----------
-  function loadStickers() {
-    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; }
+  function load(key, fallback) {
+    try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch { return fallback; }
   }
-  function saveStickers(list) {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch {}
+  function save(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
   }
-  let stickers = loadStickers();
+  let stickers = load(STORE_KEY, []);
   function updateCount() { $('stickerCount').textContent = stickers.length; }
 
   // ---------- sound ----------
@@ -256,7 +385,57 @@
     win:  () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * .12, .3, 'triangle')),
   };
 
-  // ---------- rendering ----------
+  // ---------- menu ----------
+  function renderMenu() {
+    const kindsEl = $('kinds'), levelsEl = $('levels');
+    kindsEl.innerHTML = '';
+    for (const [id, k] of Object.entries(KINDS)) {
+      const b = document.createElement('button');
+      b.className = 'kind';
+      b.setAttribute('aria-pressed', id === kind);
+      b.innerHTML = `<b></b><span></span>`;
+      b.querySelector('b').textContent = k.icon;
+      b.querySelector('span').textContent = k.label;
+      b.addEventListener('click', () => { kind = id; save(KIND_KEY, id); renderMenu(); });
+      kindsEl.appendChild(b);
+    }
+    levelsEl.innerHTML = '';
+    KINDS[kind].levels.forEach((lv, i) => {
+      const n = i + 1;
+      const b = document.createElement('button');
+      b.className = 'level';
+      b.innerHTML = `<div class="lv">レベル${n}</div>
+        <div class="body"><div class="ex"></div><div class="desc"></div></div>
+        <div class="reward">シール<span>${'⭐'.repeat(n)}</span></div>`;
+      b.querySelector('.ex').textContent = lv.ex;
+      b.querySelector('.desc').textContent = lv.desc;
+      b.addEventListener('click', () => startGame(kind, n));
+      levelsEl.appendChild(b);
+    });
+  }
+
+  function showMenu() {
+    $('rewardOverlay').classList.remove('show');
+    $('game').hidden = true;
+    $('menu').hidden = false;
+    $('backBtn').hidden = true;
+    $('title').textContent = 'けいさん れんしゅう';
+    renderMenu();
+  }
+
+  function startGame(k, lv) {
+    kind = k; level = lv;
+    $('menu').hidden = true;
+    $('game').hidden = false;
+    $('backBtn').hidden = false;
+    $('title').textContent = KINDS[k].levels.length > 1 ? `${KINDS[k].label} レベル${lv}` : KINDS[k].label;
+    correct = 0;
+    lastKey = null;
+    renderProgress();
+    nextQuestion();
+  }
+
+  // ---------- game ----------
   function renderProgress() {
     progressEl.innerHTML = '';
     for (let i = 0; i < GOAL; i++) {
@@ -276,6 +455,17 @@
     }
   }
 
+  function renderEquation(parts) {
+    equationEl.innerHTML = '';
+    equationEl.classList.toggle('long', parts.length > 5);
+    for (const p of parts) {
+      const s = document.createElement('span');
+      if (p === BLANK) { s.className = 'blank'; s.textContent = '?'; blankEl = s; }
+      else s.textContent = p;
+      equationEl.appendChild(s);
+    }
+  }
+
   function shuffle(a) {
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -285,24 +475,22 @@
   }
 
   function nextQuestion() {
-    let n;
-    do { n = Math.floor(Math.random() * 11); } while (n === last); // 0〜10
-    last = n;
-    current = n;
-    const answer = 10 - n;
+    let q;
+    do { q = makeQuestion(kind, level, correct); } while (q.key === lastKey);
+    lastKey = q.key;
+    current = q;
 
     // 選択肢: 正解 + 近い数を中心に3つ
-    const opts = new Set([answer]);
-    const near = shuffle([answer - 1, answer + 1, answer - 2, answer + 2].filter(x => x >= 0 && x <= 10));
+    const ok = x => x >= 0 && x <= q.max;
+    const opts = new Set([q.answer]);
+    const near = shuffle([-1, 1, -2, 2].map(d => q.answer + d).filter(ok));
     for (const x of near) { if (opts.size < 4) opts.add(x); }
-    while (opts.size < 4) opts.add(Math.floor(Math.random() * 11));
+    for (const d of [3, -3, 4, -4, 5, -5]) { if (opts.size < 4 && ok(q.answer + d)) opts.add(q.answer + d); }
 
-    numEl.textContent = n;
-    blankEl.textContent = '?';
-    blankEl.classList.remove('filled');
-    renderFrame(n, false);
-    frameEl.hidden = correct >= 5; // 後半5問は丸なし（数えずに考える）
-    msgEl.textContent = 'いくつ たしたら 10 になるかな？';
+    renderEquation(q.parts);
+    frameEl.hidden = q.dots === null;
+    if (q.dots !== null) renderFrame(q.dots, false);
+    msgEl.textContent = q.prompt;
     msgEl.className = 'message';
 
     choicesEl.innerHTML = '';
@@ -323,19 +511,19 @@
 
   function choose(btn, v) {
     if (locked || btn.classList.contains('wrong')) return;
-    if (current + v === 10) {
+    if (v === current.answer) {
       locked = true;
       btn.classList.add('right');
       choicesEl.querySelectorAll('button').forEach(b => b.disabled = true);
       blankEl.textContent = v;
       blankEl.classList.add('filled');
-      renderFrame(current, true);
+      if (current.dots !== null) renderFrame(current.dots, true);
       msgEl.textContent = withName(['せいかい！', 'すごい！', 'やったね！', 'ばっちり！'][Math.floor(Math.random() * 4)]);
       msgEl.className = 'message good';
       sfx.good();
       correct++;
       renderProgress();
-      setTimeout(() => correct >= GOAL ? giveSticker() : nextQuestion(), 1100);
+      setTimeout(() => correct >= GOAL ? giveStickers(level) : nextQuestion(), 1100);
     } else {
       btn.classList.add('wrong');
       msgEl.textContent = withName('おしい！ もういちど');
@@ -361,15 +549,32 @@
     return pool[pool.length - 1];
   }
 
-  function giveSticker() {
-    const owned = new Set(stickers);
-    const fresh = STICKERS.filter(s => !owned.has(s));
-    const pool = fresh.length ? fresh : STICKERS;
-    const s = pickWeighted(pool);
-    stickers.push(s);
-    saveStickers(stickers);
+  // レベルの数だけ シールを もらえる（まだ もっていない シールから先に えらぶ）
+  function giveStickers(count) {
+    const got = [];
+    for (let i = 0; i < count; i++) {
+      const owned = new Set(stickers);
+      const fresh = STICKERS.filter(s => !owned.has(s));
+      const notToday = STICKERS.filter(s => !got.includes(s));
+      const pool = fresh.length ? fresh : (notToday.length ? notToday : STICKERS);
+      const s = pickWeighted(pool);
+      stickers.push(s);
+      got.push(s);
+    }
+    save(STORE_KEY, stickers);
     updateCount();
-    showSticker($('rewardSticker'), s);
+
+    const box = $('rewardStickers');
+    box.innerHTML = '';
+    box.classList.toggle('many', count > 1);
+    got.forEach((s, i) => {
+      const d = document.createElement('div');
+      d.className = 'sticker-big';
+      d.style.animationDelay = i * 0.25 + 's';
+      showSticker(d, s);
+      box.appendChild(d);
+    });
+    $('rewardInfo').textContent = `シールを ${count}まい もらったよ`;
     $('rewardOverlay').classList.add('show');
     sfx.win();
     confetti();
@@ -391,10 +596,10 @@
 
   $('againBtn').addEventListener('click', () => {
     $('rewardOverlay').classList.remove('show');
-    correct = 0;
-    renderProgress();
-    nextQuestion();
+    startGame(kind, level);
   });
+  $('menuBtn').addEventListener('click', showMenu);
+  $('backBtn').addEventListener('click', showMenu);
 
   // ---------- sticker book ----------
   function openBook() {
@@ -415,9 +620,10 @@
   $('bookBtn').addEventListener('click', openBook);
   $('closeBook').addEventListener('click', () => $('bookOverlay').classList.remove('show'));
 
+  const savedKind = load(KIND_KEY, 'make10');
+  if (KINDS[savedKind]) kind = savedKind;
   updateCount();
-  renderProgress();
-  nextQuestion();
+  showMenu();
   loadStickerImages();
 })();
 </script>
