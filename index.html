@@ -93,16 +93,17 @@
   .frame i.on { background: var(--dot); border: 3px solid var(--dot); }
   .frame i.add { background: var(--good); border: 3px solid var(--good); }
 
-  .choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .choices button {
-    font: inherit; font-size: clamp(40px, 12vw, 60px); font-weight: 800; color: var(--ink);
-    background: var(--card); border: none; border-radius: 24px; padding: 14px 0;
+    font: inherit; font-size: clamp(28px, 9vw, 48px); font-weight: 800; color: var(--ink);
+    background: var(--card); border: none; border-radius: 20px; padding: 14px 0;
     box-shadow: 0 6px 0 var(--shadow); cursor: pointer; transition: transform .08s;
   }
   .choices button:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--shadow); }
   .choices button.wrong { background: var(--bad-soft); color: var(--bad); animation: shake .4s; }
   .choices button.right { background: var(--good); color: var(--on-accent); box-shadow: 0 6px 0 var(--good-dark); }
   .choices button:disabled { cursor: default; }
+  .choices button.reveal { outline: 4px solid var(--good); outline-offset: -4px; color: var(--good); }
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
 
   .message { text-align: center; font-size: 22px; min-height: 1.5em; font-weight: 700; }
@@ -357,7 +358,8 @@
   const progressEl = $('progress'), equationEl = $('equation'), frameEl = $('frame');
   const msgEl = $('message'), choicesEl = $('choices');
 
-  let kind = 'make10', level = 1;
+  const DROP_AFTER = 4;     // 1問で 4かい まちがえると レベルが さがる
+  let kind = 'make10', level = 1, startLevel = 1, wrongThisQ = 0;
   let correct = 0, current = null, lastKey = null, locked = false, blankEl = null;
 
   // ---------- storage ----------
@@ -429,12 +431,12 @@
   }
 
   function startGame(k, lv) {
-    kind = k; level = lv;
+    kind = k; level = lv; startLevel = lv;
     $('menu').hidden = true;
     $('game').hidden = false;
     $('backBtn').hidden = false;
     $('title').hidden = true;
-    $('gameTitle').textContent = KINDS[k].levels.length > 1 ? `${KINDS[k].label} レベル${lv}` : KINDS[k].label;
+    renderGameTitle();
     correct = 0;
     lastKey = null;
     renderProgress();
@@ -442,6 +444,11 @@
   }
 
   // ---------- game ----------
+  function renderGameTitle() {
+    $('gameTitle').textContent = KINDS[kind].levels.length > 1 ? `${KINDS[kind].label} レベル${level}` : KINDS[kind].label;
+  }
+  const canDrop = () => KINDS[kind].levels.length > 1 && level > 1;
+
   function renderProgress() {
     progressEl.innerHTML = '';
     for (let i = 0; i < GOAL; i++) {
@@ -486,12 +493,15 @@
     lastKey = q.key;
     current = q;
 
-    // 選択肢: 正解 + 近い数を中心に3つ
+    // 選択肢: 正解 + 近い数を 7つ（ぜんぶで 8つ）、小さい じゅんに ならべる
     const ok = x => x >= 0 && x <= q.max;
-    const opts = new Set([q.answer]);
-    const near = shuffle([-1, 1, -2, 2].map(d => q.answer + d).filter(ok));
-    for (const x of near) { if (opts.size < 4) opts.add(x); }
-    for (const d of [3, -3, 4, -4, 5, -5]) { if (opts.size < 4 && ok(q.answer + d)) opts.add(q.answer + d); }
+    const opts = [q.answer];
+    for (let d = 1; opts.length < 8 && d <= 20; d++) {
+      for (const x of shuffle([q.answer - d, q.answer + d].filter(ok))) {
+        if (opts.length < 8) opts.push(x);
+      }
+    }
+    opts.sort((a, b) => a - b);
 
     renderEquation(q.parts);
     frameEl.hidden = q.dots === null;
@@ -500,12 +510,13 @@
     msgEl.className = 'message';
 
     choicesEl.innerHTML = '';
-    shuffle([...opts]).forEach(v => {
+    opts.forEach(v => {
       const b = document.createElement('button');
       b.textContent = v;
       b.addEventListener('click', () => choose(b, v));
       choicesEl.appendChild(b);
     });
+    wrongThisQ = 0;
     locked = false;
   }
 
@@ -532,10 +543,30 @@
       setTimeout(() => correct >= GOAL ? giveStickers(level) : nextQuestion(), 1100);
     } else {
       btn.classList.add('wrong');
-      msgEl.textContent = withName('おしい！ もういちど');
-      msgEl.className = 'message bad';
+      wrongThisQ++;
       sfx.bad();
+      if (canDrop() && wrongThisQ >= DROP_AFTER) return levelDown();
+      msgEl.textContent = canDrop() && wrongThisQ === DROP_AFTER - 1
+        ? 'あと1かい まちがえると レベルが さがるよ'
+        : withName('おしい！ もういちど');
+      msgEl.className = 'message bad';
     }
+  }
+
+  // 4かい まちがえたら こたえを みせて、レベルを 1つ さげる（★は ふえない）
+  function levelDown() {
+    locked = true;
+    level--;
+    choicesEl.querySelectorAll('button').forEach(b => {
+      b.disabled = true;
+      if (+b.textContent === current.answer) b.classList.add('reveal');
+    });
+    blankEl.textContent = current.answer;
+    msgEl.textContent = `こたえは ${current.answer}。レベル${level}に さがったよ`;
+    msgEl.className = 'message bad';
+    renderGameTitle();
+    tone(392, 0, .2, 'triangle', .2); tone(262, .18, .35, 'triangle', .2);
+    setTimeout(nextQuestion, 2200);
   }
 
   // ---------- reward ----------
@@ -580,7 +611,9 @@
       showSticker(d, s);
       box.appendChild(d);
     });
-    $('rewardInfo').textContent = `シールを ${count}まい もらったよ`;
+    $('rewardInfo').textContent = count < startLevel
+      ? `レベル${startLevel}から レベル${count}に さがったので、シールは ${count}まい`
+      : `シールを ${count}まい もらったよ`;
     $('rewardOverlay').classList.add('show');
     sfx.win();
     confetti();
@@ -602,7 +635,7 @@
 
   $('againBtn').addEventListener('click', () => {
     $('rewardOverlay').classList.remove('show');
-    startGame(kind, level);
+    startGame(kind, startLevel);
   });
   $('menuBtn').addEventListener('click', showMenu);
   $('backBtn').addEventListener('click', showMenu);
