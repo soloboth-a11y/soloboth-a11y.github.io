@@ -194,6 +194,18 @@
   .reward-stickers.many .sticker-big img { width: 64px; height: 64px; }
   .reload-row { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; text-align: center; }
   .reload-row .sub { font-size: 13px; }
+  .secondary:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--shadow); }
+  .spin { display: inline-block; }
+  #reloadBtn.loading { background: var(--accent); color: var(--on-accent); box-shadow: 0 5px 0 var(--accent-dark); }
+  #reloadBtn.loading .spin { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .toast {
+    position: fixed; left: 50%; top: calc(16px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+    background: var(--good); color: var(--on-accent); font-size: 18px; font-weight: 800;
+    padding: 12px 22px; border-radius: 999px; box-shadow: 0 4px 0 var(--good-dark); z-index: 30;
+    white-space: nowrap; animation: toast 2.4s ease forwards;
+  }
+  @keyframes toast { 0% { opacity: 0; transform: translate(-50%, -20px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -20px); } }
   .reward-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
   .secondary {
     font: inherit; font-size: 18px; font-weight: 800; color: var(--ink); background: var(--track);
@@ -216,7 +228,7 @@
   <div class="kinds" id="kinds"></div>
   <div class="levels" id="levels"></div>
   <div class="reload-row">
-    <button class="secondary" id="reloadBtn">🔄 さいよみこみ</button>
+    <button class="secondary" id="reloadBtn"><span class="spin">🔄</span> <span id="reloadLabel">さいよみこみ</span></button>
     <div class="sub">あたらしい シールや もんだいを よみこみます。あつめた シールは きえません。</div>
   </div>
 </main>
@@ -647,7 +659,32 @@
   $('backBtn').addEventListener('click', showMenu);
   $('bookTopBtn').addEventListener('click', showMenu);
   // ページを よみこみなおす（シールは ブラウザに ほぞんしてあるので そのまま）
-  $('reloadBtn').addEventListener('click', () => { save(STORE_KEY, stickers); location.reload(); });
+  // おしたら くるくる まわして「よみこみちゅう…」→ よみこんだあと「よみこみ できたよ！」を だす
+  const RELOAD_FLAG = 'make10.reloaded';
+  $('reloadBtn').addEventListener('click', () => {
+    const btn = $('reloadBtn');
+    if (btn.classList.contains('loading')) return;
+    save(STORE_KEY, stickers);
+    btn.classList.add('loading');
+    $('reloadLabel').textContent = 'よみこみちゅう…';
+    tone(660, 0, .12); tone(880, .1, .15);
+    try { sessionStorage.setItem(RELOAD_FLAG, '1'); } catch {}
+    setTimeout(() => location.reload(), 700);
+  });
+  function showToast(text) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.setAttribute('role', 'status');
+    t.textContent = text;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2600);
+  }
+  try {
+    if (sessionStorage.getItem(RELOAD_FLAG)) {
+      sessionStorage.removeItem(RELOAD_FLAG);
+      showToast(`✅ よみこみ できたよ！ シール ${stickers.length}まい`);
+    }
+  } catch {}
 
   // ---------- sticker book ----------
   function openBook() {
