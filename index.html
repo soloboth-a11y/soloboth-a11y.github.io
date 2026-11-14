@@ -192,6 +192,8 @@
   .reward-stickers .sticker-big { margin: 0; animation-fill-mode: both; }
   .reward-stickers.many .sticker-big { font-size: 56px; }
   .reward-stickers.many .sticker-big img { width: 64px; height: 64px; }
+  .reload-row { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; text-align: center; }
+  .reload-row .sub { font-size: 13px; }
   .reward-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
   .secondary {
     font: inherit; font-size: 18px; font-weight: 800; color: var(--ink); background: var(--track);
@@ -213,6 +215,10 @@
   <p class="menu-title">どれに する？</p>
   <div class="kinds" id="kinds"></div>
   <div class="levels" id="levels"></div>
+  <div class="reload-row">
+    <button class="secondary" id="reloadBtn">🔄 さいよみこみ</button>
+    <div class="sub">あたらしい シールや もんだいを よみこみます。あつめた シールは きえません。</div>
+  </div>
 </main>
 
 <main id="game" hidden>
@@ -640,6 +646,8 @@
   $('menuBtn').addEventListener('click', showMenu);
   $('backBtn').addEventListener('click', showMenu);
   $('bookTopBtn').addEventListener('click', showMenu);
+  // ページを よみこみなおす（シールは ブラウザに ほぞんしてあるので そのまま）
+  $('reloadBtn').addEventListener('click', () => { save(STORE_KEY, stickers); location.reload(); });
 
   // ---------- sticker book ----------
   function openBook() {
