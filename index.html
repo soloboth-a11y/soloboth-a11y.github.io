@@ -198,6 +198,46 @@
   .reward-stickers .sticker-big { margin: 0; animation-fill-mode: both; }
   .reward-stickers.many .sticker-big { font-size: 56px; }
   .reward-stickers.many .sticker-big img { width: 64px; height: 64px; }
+  .head-btns { display: flex; gap: 6px; flex-shrink: 0; }
+  #calBtn { padding: 8px 10px; font-size: 18px; }
+
+  /* calendar */
+  .cal-panel { padding: 20px 8px; }
+  .cal-nav { display: flex; align-items: center; gap: 2px; margin: 12px 0 4px; }
+  .cal-arrow {
+    flex: 0 0 28px; height: 56px; border: none; border-radius: 12px; background: var(--track);
+    color: var(--ink); font: inherit; font-size: 26px; font-weight: 800; cursor: pointer; padding: 0;
+  }
+  .cal-arrow:disabled { opacity: .3; cursor: default; }
+  .cal-strip {
+    flex: 1; min-width: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+    scrollbar-width: none; overscroll-behavior-x: contain;
+  }
+  .cal-strip::-webkit-scrollbar { display: none; }
+  .cal-month { flex: 0 0 100%; scroll-snap-align: start; padding: 0 2px; }
+  .cal-month h3 { margin: 0 0 8px; font-size: 18px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .cal-grid .wd { font-size: 12px; font-weight: 700; color: var(--sub); padding: 2px 0; }
+  .cal-grid .wd.sun { color: var(--bad); }
+  .day {
+    min-width: 0; aspect-ratio: 1 / 1.3; border-radius: 10px; background: var(--track); color: var(--ink);
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px;
+    padding: 3px 0 0; font: inherit; font-size: 11px; line-height: 1.15; border: none;
+  }
+  .day.blank { background: transparent; }
+  .day .n { font-size: 12px; font-weight: 700; color: var(--sub); }
+  .day .got { font-size: 12px; font-weight: 800; white-space: nowrap; }
+  .day .bonus { font-size: 12px; font-weight: 800; white-space: nowrap; }
+  .day.has { background: var(--star); }
+  .day.has .n { color: var(--ink); }
+  .day.today { box-shadow: inset 0 0 0 3px var(--accent); }
+  button.day.claim {
+    background: var(--accent); color: var(--on-accent); cursor: pointer;
+    box-shadow: 0 3px 0 var(--accent-dark); animation: wiggle 1.2s ease-in-out infinite;
+  }
+  button.day.claim .n { color: var(--on-accent); }
+  @keyframes wiggle { 0%, 100% { transform: rotate(0); } 10% { transform: rotate(-6deg); } 20% { transform: rotate(6deg); } 30% { transform: rotate(0); } }
+
   .reload-row { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; text-align: center; }
   .reload-row .sub { font-size: 13px; }
   .secondary:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--shadow); }
@@ -227,7 +267,10 @@
     <h1 id="title">シールあつめ</h1>
   </div>
   <div class="sprite-zone" id="spriteZone" aria-hidden="true"></div>
-  <button class="book-btn" id="bookBtn">📒 シール <span id="stickerCount">0</span></button>
+  <div class="head-btns">
+    <button class="book-btn" id="calBtn" aria-label="カレンダー">📅</button>
+    <button class="book-btn" id="bookBtn">📒 シール <span id="stickerCount">0</span></button>
+  </div>
 </header>
 
 <main id="menu">
@@ -256,13 +299,27 @@
 
 <div class="overlay" id="rewardOverlay">
   <div class="panel">
-    <h2>花ちゃん、<br>10かい せいかい！</h2>
+    <h2>花ちゃん、<br><span id="rewardTitle">10かい せいかい！</span></h2>
     <div class="sub" id="rewardInfo">シールを もらったよ</div>
     <div class="reward-stickers" id="rewardStickers"></div>
     <div class="reward-actions">
       <button class="primary" id="againBtn">もういちど</button>
       <button class="secondary" id="menuBtn">🏠 トップに もどる</button>
+      <button class="primary" id="calBackBtn" hidden>📅 カレンダーに もどる</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="calOverlay">
+  <div class="panel cal-panel">
+    <h2>📅 カレンダー</h2>
+    <div class="sub">シールを もらった日に まいすうが でるよ。<br>れんぞくの日の 🎁を おすと、れんぞく 日数ぶん シールが もらえるよ。</div>
+    <div class="cal-nav">
+      <button class="cal-arrow" id="calPrev" aria-label="まえの月">‹</button>
+      <div class="cal-strip" id="calStrip"></div>
+      <button class="cal-arrow" id="calNext" aria-label="つぎの月">›</button>
+    </div>
+    <button class="primary" id="closeCal">とじる</button>
   </div>
 </div>
 
@@ -356,6 +413,8 @@
   const STICKER_DIR = 'stickers/';
   const STORE_KEY = 'make10.stickers';
   const KIND_KEY = 'make10.kind';
+  const LOG_KEY = 'make10.log';       // { 'YYYY-MM-DD': その日に もんだいで もらった まいすう }
+  const BONUS_KEY = 'make10.bonus';   // { 'YYYY-MM-DD': れんぞくボーナスで もらった まいすう }
 
   // フォルダの 画像の 一覧を とってくる。
   // 1) GitHub Actions が作った 一覧ファイル（stickers.json など）があれば それを つかう
@@ -543,6 +602,7 @@
   function showMenu() {
     $('rewardOverlay').classList.remove('show');
     $('bookOverlay').classList.remove('show');
+    $('calOverlay').classList.remove('show');
     $('game').hidden = true;
     $('menu').hidden = false;
     $('backBtn').hidden = true;
@@ -711,7 +771,8 @@
   }
 
   // レベルの数だけ シールを もらえる（まだ もっていない シールから先に えらぶ）
-  function giveStickers(count) {
+  // シールを count まい えらんで ほぞんする（まだ もっていない シールから先に）
+  function awardStickers(count) {
     const got = [];
     for (let i = 0; i < count; i++) {
       const owned = new Set(stickers);
@@ -724,7 +785,12 @@
     }
     save(STORE_KEY, stickers);
     updateCount();
+    return got;
+  }
 
+  // ごほうび画面を だす。from: 'game'（もんだいを 10かい せいかい）か 'calendar'（れんぞくボーナス）
+  function showReward(got, title, info, from) {
+    const count = got.length;
     const box = $('rewardStickers');
     box.innerHTML = '';
     box.classList.toggle('many', count > 1);
@@ -735,13 +801,148 @@
       showSticker(d, s);
       box.appendChild(d);
     });
-    $('rewardInfo').textContent = count < startLevel
-      ? `レベル${startLevel}から レベル${count}に さがったので、シールは ${count}まい`
-      : `シールを ${count}まい もらったよ`;
+    $('rewardTitle').textContent = title;
+    $('rewardInfo').textContent = info;
+    $('againBtn').hidden = from !== 'game';
+    $('menuBtn').hidden = from !== 'game';
+    $('calBackBtn').hidden = from !== 'calendar';
     $('rewardOverlay').classList.add('show');
     sfx.win();
     confetti();
   }
+
+  function giveStickers(count) {
+    const got = awardStickers(count);
+    const key = dayKey(new Date());
+    log[key] = (log[key] || 0) + count;
+    save(LOG_KEY, log);
+    showReward(got, '10かい せいかい！', count < startLevel
+      ? `レベル${startLevel}から レベル${count}に さがったので、シールは ${count}まい`
+      : `シールを ${count}まい もらったよ`, 'game');
+  }
+
+  // ---------- calendar ----------
+  let log = load(LOG_KEY, {}), bonus = load(BONUS_KEY, {});
+  const pad = n => String(n).padStart(2, '0');
+  const dayKey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+
+  // その日までの れんぞく日数（その日に もらっていなければ 0）
+  function streakAt(d) {
+    let n = 0;
+    while (log[dayKey(addDays(d, -n))] > 0) n++;
+    return n;
+  }
+
+  const WEEK = ['にち', 'げつ', 'か', 'すい', 'もく', 'きん', 'ど'];
+  let wheelLock = 0, calPos = null; // calPos: ボーナスを もらう まえに みていた 月
+
+  function buildMonth(year, month, today) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cal-month';
+    const h = document.createElement('h3');
+    h.textContent = `${year}ねん ${month + 1}がつ`;
+    const grid = document.createElement('div');
+    grid.className = 'cal-grid';
+    WEEK.forEach((w, i) => {
+      const c = document.createElement('div');
+      c.className = 'wd' + (i === 0 ? ' sun' : '');
+      c.textContent = w;
+      grid.appendChild(c);
+    });
+    const first = new Date(year, month, 1);
+    for (let i = 0; i < first.getDay(); i++) {
+      const c = document.createElement('div');
+      c.className = 'day blank';
+      grid.appendChild(c);
+    }
+    const days = new Date(year, month + 1, 0).getDate();
+    for (let dd = 1; dd <= days; dd++) {
+      const d = new Date(year, month, dd), key = dayKey(d);
+      const got = log[key] || 0;
+      const streak = got ? streakAt(d) : 0;
+      const claimable = streak >= 2 && !bonus[key];
+      const c = document.createElement(claimable ? 'button' : 'div');
+      c.className = 'day' + (got ? ' has' : '') + (key === dayKey(today) ? ' today' : '') + (claimable ? ' claim' : '');
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = dd; c.appendChild(n);
+      if (got) { const g = document.createElement('span'); g.className = 'got'; g.textContent = `⭐${got}`; c.appendChild(g); }
+      if (claimable) {
+        const b = document.createElement('span'); b.className = 'bonus'; b.textContent = `🎁${streak}`; c.appendChild(b);
+        c.setAttribute('aria-label', `${month + 1}がつ${dd}にち ${streak}にち れんぞく。おすと シール ${streak}まい`);
+        c.addEventListener('click', () => claimBonus(key, streak));
+      } else if (bonus[key]) {
+        const b = document.createElement('span'); b.className = 'bonus'; b.textContent = '✅'; c.appendChild(b);
+      }
+      grid.appendChild(c);
+    }
+    wrap.append(h, grid);
+    return wrap;
+  }
+
+  // 月の はんい: いちばん むかしの きろく（なければ 2か月まえ）〜 らいげつ
+  function openCalendar(keepScroll) {
+    const strip = $('calStrip');
+    const today = new Date();
+    const keys = Object.keys(log).filter(k => log[k] > 0).sort();
+    let start = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+    if (keys.length) {
+      const [y, m] = keys[0].split('-').map(Number);
+      const first = new Date(y, m - 1, 1);
+      if (first < start) start = first;
+    }
+    strip.innerHTML = '';
+    let index = 0, current = 0;
+    for (let d = start; d <= new Date(today.getFullYear(), today.getMonth() + 1, 1); d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()) current = index;
+      strip.appendChild(buildMonth(d.getFullYear(), d.getMonth(), today));
+      index++;
+    }
+    $('calOverlay').classList.add('show');
+    strip.scrollLeft = (keepScroll && calPos !== null ? calPos : current) * strip.clientWidth;
+    updateCalArrows();
+  }
+
+  function calIndex() { const strip = $('calStrip'); return Math.round(strip.scrollLeft / strip.clientWidth); }
+  function scrollCal(dir) {
+    const strip = $('calStrip');
+    const i = Math.min(Math.max(calIndex() + dir, 0), strip.children.length - 1);
+    strip.scrollTo({ left: i * strip.clientWidth, behavior: 'smooth' });
+  }
+  function updateCalArrows() {
+    const strip = $('calStrip'), i = calIndex();
+    $('calPrev').disabled = i <= 0;
+    $('calNext').disabled = i >= strip.children.length - 1;
+  }
+
+  function claimBonus(key, streak) {
+    if (bonus[key]) return;
+    calPos = calIndex();
+    const got = awardStickers(streak);
+    bonus[key] = streak;
+    save(BONUS_KEY, bonus);
+    $('calOverlay').classList.remove('show');
+    const [, m, d] = key.split('-').map(Number);
+    showReward(got, `${streak}にち れんぞく！`, `${m}がつ${d}にちの ボーナスで シールを ${streak}まい もらったよ`, 'calendar');
+  }
+
+  $('calBtn').addEventListener('click', () => openCalendar(false));
+  $('closeCal').addEventListener('click', () => $('calOverlay').classList.remove('show'));
+  $('calPrev').addEventListener('click', () => scrollCal(-1));
+  $('calNext').addEventListener('click', () => scrollCal(1));
+  $('calStrip').addEventListener('scroll', updateCalArrows, { passive: true });
+  // パソコンの マウスホイールでも 月を かえられる
+  $('calStrip').addEventListener('wheel', e => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now - wheelLock < 450) return;
+    wheelLock = now;
+    scrollCal(Math.sign(e.deltaY));
+  }, { passive: false });
+  $('calBackBtn').addEventListener('click', () => {
+    $('rewardOverlay').classList.remove('show');
+    openCalendar(true);
+  });
 
   function confetti() {
     const items = ['🎉', '⭐', '✨', '🎊', '💖'];
