@@ -29,13 +29,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Build sticker list
-        run: node tools/build-stickers.mjs
+      - name: Build sticker and sprite lists
+        run: node tools/build-lists.mjs
       - name: Collect site files
         run: |
           mkdir _site
           cp index.html _site/
-          cp -r stickers _site/
+          cp -r stickers sprites _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

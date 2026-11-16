@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>10をつくろう</title>
+<title>シールあつめ</title>
 <style>
   :root {
     --bg: #fff8e7;
@@ -152,6 +152,8 @@
   @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
 
   [hidden] { display: none !important; }
+  .sprite-zone { flex: 1; min-width: 0; height: 56px; position: relative; margin: 0 6px; }
+  .sprite { position: absolute; background-repeat: no-repeat; pointer-events: none; }
   header .left { display: flex; align-items: center; gap: 10px; min-width: 0; }
   header h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 20px; }
   .book-btn { white-space: nowrap; flex-shrink: 0; }
@@ -218,8 +220,9 @@
 <header>
   <div class="left">
     <button class="back-btn" id="backBtn" hidden>🏠 トップ</button>
-    <h1 id="title">けいさん れんしゅう</h1>
+    <h1 id="title">シールあつめ</h1>
   </div>
+  <div class="sprite-zone" id="spriteZone" aria-hidden="true"></div>
   <button class="book-btn" id="bookBtn">📒 シール <span id="stickerCount">0</span></button>
 </header>
 
@@ -409,6 +412,80 @@
     win:  () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * .12, .3, 'triangle')),
   };
 
+  // ---------- トップの アニメーション（スプライトシート） ----------
+  // sprites/ の画像を 1つ ランダムに えらび、タイトルの となりの ランダムな場所で うごかす。
+  // ファイル名の さいご: _8x1（よこ×たて）, _7f（つかう コマ数）, _12fps（はやさ）。なければ よこ1れつの 正方形コマ。
+  const SPRITE_DIR = 'sprites/';
+  let SPRITES = [], spriteTimer = null, spriteToken = 0;
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  async function loadSprites() {
+    try {
+      const res = await fetch(SPRITE_DIR + 'sprites.json', { cache: 'no-cache' });
+      if (!res.ok) return;
+      const files = await res.json();
+      if (Array.isArray(files)) SPRITES = files;
+    } catch {}
+    if (!$('menu').hidden) showSprite();
+  }
+
+  function parseSpriteName(file, img) {
+    const base = file.replace(/\.[^.]+$/, '');
+    let cols, rows, frames, fps = 8;
+    const fpsM = base.match(/_(\d+)fps$/i);
+    if (fpsM) fps = Math.max(1, +fpsM[1]);
+    const grid = base.match(/_(\d+)x(\d+)(?:_(\d+)f)?(?:_\d+fps)?$/i);
+    if (grid) { cols = +grid[1]; rows = +grid[2]; frames = grid[3] ? +grid[3] : cols * rows; }
+    else { rows = 1; cols = Math.max(1, Math.round(img.naturalWidth / img.naturalHeight)); frames = cols; }
+    cols = Math.max(1, cols); rows = Math.max(1, rows);
+    frames = Math.min(Math.max(1, frames), cols * rows);
+    return { cols, rows, frames, fps };
+  }
+
+  function stopSprite() {
+    clearInterval(spriteTimer);
+    spriteTimer = null;
+    spriteToken++;
+    $('spriteZone').innerHTML = '';
+  }
+
+  function showSprite() {
+    stopSprite();
+    if (!SPRITES.length) return;
+    const token = spriteToken;
+    const file = SPRITES[rand(0, SPRITES.length - 1)];
+    const url = SPRITE_DIR + encodeURIComponent(file);
+    const img = new Image();
+    img.onload = () => {
+      if (token !== spriteToken) return; // とちゅうで べつの がめんに なった
+      const zone = $('spriteZone');
+      const { cols, rows, frames, fps } = parseSpriteName(file, img);
+      const fw = img.naturalWidth / cols, fh = img.naturalHeight / rows;
+      const zoneW = zone.clientWidth, zoneH = zone.clientHeight;
+      let h = zoneH, w = h * fw / fh;
+      if (w > zoneW) { w = zoneW; h = w * fh / fw; }
+      const el = document.createElement('div');
+      el.className = 'sprite';
+      Object.assign(el.style, {
+        width: w + 'px', height: h + 'px',
+        left: Math.random() * Math.max(0, zoneW - w) + 'px',
+        top: (zoneH - h) / 2 + 'px',
+        backgroundImage: `url("${url}")`,
+        backgroundSize: `${cols * 100}% ${rows * 100}%`,
+        imageRendering: fh <= 64 ? 'pixelated' : 'auto',
+      });
+      let i = 0;
+      const draw = () => {
+        const c = i % cols, r = Math.floor(i / cols);
+        el.style.backgroundPosition = `${cols > 1 ? c / (cols - 1) * 100 : 0}% ${rows > 1 ? r / (rows - 1) * 100 : 0}%`;
+      };
+      draw();
+      zone.appendChild(el);
+      if (!reduceMotion && frames > 1) spriteTimer = setInterval(() => { i = (i + 1) % frames; draw(); }, 1000 / fps);
+    };
+    img.src = url;
+  }
+
   // ---------- menu ----------
   function renderMenu() {
     const kindsEl = $('kinds'), levelsEl = $('levels');
@@ -445,6 +522,8 @@
     $('menu').hidden = false;
     $('backBtn').hidden = true;
     $('title').hidden = false;
+    $('spriteZone').hidden = false;
+    showSprite();
     renderMenu();
   }
 
@@ -454,6 +533,8 @@
     $('game').hidden = false;
     $('backBtn').hidden = false;
     $('title').hidden = true;
+    $('spriteZone').hidden = true;
+    stopSprite();
     renderGameTitle();
     correct = 0;
     lastKey = null;
@@ -711,6 +792,7 @@
   updateCount();
   showMenu();
   loadStickerImages();
+  loadSprites();
 })();
 </script>
 </body>
