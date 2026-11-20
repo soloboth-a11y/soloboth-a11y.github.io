@@ -168,13 +168,25 @@
 
   /* menu */
   .menu-title { font-size: 20px; font-weight: 800; margin: 4px 0 0; text-align: center; }
-  .kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .kinds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .kind {
     font: inherit; font-size: 15px; font-weight: 800; color: var(--ink); background: var(--card);
     border: none; border-radius: 20px; padding: 12px 4px; box-shadow: 0 4px 0 var(--shadow); cursor: pointer;
     display: flex; flex-direction: column; align-items: center; gap: 2px;
   }
-  .kind b { font-size: 34px; line-height: 1.1; }
+  .kind b { font-size: 30px; line-height: 1.1; }
+  .kind { font-size: 13px; padding: 10px 2px; white-space: pre-line; line-height: 1.2; }
+  .clock { display: block; width: min(210px, 58vw); height: auto; margin: 0 auto 8px; }
+  .clock .face { fill: var(--card); stroke: var(--ink); stroke-width: 6; }
+  .clock .tick { stroke: var(--sub); stroke-width: 2; stroke-linecap: round; }
+  .clock .tick.major { stroke: var(--ink); stroke-width: 4; }
+  .clock .num { fill: var(--ink); font-size: 22px; font-weight: 800; font-family: inherit; text-anchor: middle; dominant-baseline: central; }
+  .clock .hour { stroke: var(--accent); stroke-width: 10; stroke-linecap: round; }
+  .clock .minute { stroke: var(--ink); stroke-width: 6; stroke-linecap: round; }
+  .clock .pin { fill: var(--ink); }
+  .equation.clock-answer { font-size: clamp(26px, 8vw, 40px); }
+  .choices.wide { grid-template-columns: repeat(2, 1fr); }
+  .choices.wide button { font-size: clamp(20px, 6.5vw, 30px); padding: 12px 0; white-space: nowrap; }
   .kind[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 0 var(--accent-dark); }
   .levels { display: flex; flex-direction: column; gap: 12px; }
   .level {
@@ -288,6 +300,7 @@
   <div class="progress" id="progress"></div>
 
   <div class="card">
+    <div id="clockBox"></div>
     <div class="equation" id="equation"></div>
     <div class="frame" id="frame"></div>
   </div>
@@ -371,7 +384,7 @@
 
   const KINDS = {
     make10: {
-      label: '10を つくろう', icon: '10',
+      label: '10を つくろう', short: '10を\nつくろう', icon: '10',
       levels: [{ ex: `3 + ? = 10`, desc: 'たして 10に なる数' }],
     },
     add: {
@@ -392,9 +405,75 @@
         { ex: `19 ${MINUS} 4 ${MINUS} 6 ${MINUS} 2`, desc: '3かい ひく' },
       ],
     },
+    clock: {
+      label: 'とけい', icon: '🕐',
+      levels: [
+        { ex: '3じ', desc: 'ちょうど（0ぷん）' },
+        { ex: '3じ30ぷん', desc: '30ぷん' },
+        { ex: '3じ25ふん', desc: 'ながい はりが すうじに' },
+        { ex: '3じ17ふん', desc: 'どこでも' },
+      ],
+    },
   };
 
+  // ---------- とけい ----------
+  // 「ふん」「ぷん」: 1,3,4,6,8,0 で おわる ときは ぷん（いっぷん, さんぷん, じゅっぷん …）
+  const pun = m => [0, 1, 3, 4, 6, 8].includes(m % 10) ? 'ぷん' : 'ふん';
+  const timeText = (h, m) => m === 0 ? `${h}じ` : `${h}じ${m}${pun(m)}`;
+  const wrapH = h => ((h - 1 + 12) % 12) + 1;   // 1〜12 に そろえる
+
+  // レベル1: ちょうど / 2: 30ぷん / 3: 5ふん ごと（ながい はりが すうじの うえ）/ 4: どこでも
+  function makeClock(level) {
+    const h = rand(1, 12);
+    const m = level === 1 ? 0 : level === 2 ? 30 : level === 3 ? rand(0, 11) * 5 : rand(0, 59);
+    const okMin = x => level === 1 ? x === 0 : level === 2 ? x === 30 : level === 3 ? x % 5 === 0 : true;
+    const opts = new Map();
+    const add = (hh, mm) => {
+      hh = wrapH(hh); mm = ((mm % 60) + 60) % 60;
+      if (okMin(mm) && opts.size < 8) opts.set(hh * 60 + mm, [hh, mm]);
+    };
+    add(h, m);
+    // よくある まちがい を さきに いれる
+    add(h + 1, m); add(h - 1, m);                         // みじかい はりの よみまちがい
+    if (level >= 3) {
+      add(Math.round(m / 5) || 12, (h % 12) * 5);         // ながい はりと みじかい はりを ぎゃくに よむ
+      add(h, m + 5); add(h, m - 5); add(h, 60 - m);
+    }
+    if (level === 4) { add(h, m + 1); add(h, m - 1); add(h, m + 10); }
+    while (opts.size < 8) add(rand(1, 12), level === 3 ? rand(0, 11) * 5 : level === 4 ? rand(0, 59) : m);
+    const choices = [...opts.values()].sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([hh, mm]) => timeText(hh, mm));
+    return { key: `c${h}:${m}`, clock: [h, m], parts: [BLANK], answer: timeText(h, m), choices, max: 0,
+             dots: null, prompt: level === 1 ? 'なんじ かな？' : 'なんじ なんぷん かな？' };
+  }
+
+  function drawClock(h, m) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 240 240');
+    svg.setAttribute('class', 'clock');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'とけい');
+    const el = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; };
+    const C = 120, pt = (deg, len) => [C + len * Math.sin(deg * Math.PI / 180), C - len * Math.cos(deg * Math.PI / 180)];
+    el('circle', { cx: C, cy: C, r: 112, class: 'face' });
+    for (let i = 0; i < 60; i++) {
+      const major = i % 5 === 0, [x1, y1] = pt(i * 6, major ? 92 : 98), [x2, y2] = pt(i * 6, 104);
+      el('line', { x1, y1, x2, y2, class: 'tick' + (major ? ' major' : '') });
+    }
+    for (let n = 1; n <= 12; n++) {
+      const [x, y] = pt(n * 30, 74);
+      el('text', { x, y, class: 'num' }).textContent = n;
+    }
+    const [hx, hy] = pt(((h % 12) + m / 60) * 30, 50);
+    const [mx, my] = pt(m * 6, 86);
+    el('line', { x1: C, y1: C, x2: hx, y2: hy, class: 'hour' });
+    el('line', { x1: C, y1: C, x2: mx, y2: my, class: 'minute' });
+    el('circle', { cx: C, cy: C, r: 8, class: 'pin' });
+    return svg;
+  }
+
   function makeQuestion(kind, level, index) {
+    if (kind === 'clock') return makeClock(level);
     if (kind === 'make10') {
       const n = rand(0, 10);
       return { key: 'm' + n, parts: [n, '+', BLANK, '=', 10], answer: 10 - n, max: 10,
@@ -580,7 +659,7 @@
       b.setAttribute('aria-pressed', id === kind);
       b.innerHTML = `<b></b><span></span>`;
       b.querySelector('b').textContent = k.icon;
-      b.querySelector('span').textContent = k.label;
+      b.querySelector('span').textContent = k.short || k.label;
       b.addEventListener('click', () => { kind = id; save(KIND_KEY, id); renderMenu(); });
       kindsEl.appendChild(b);
     }
@@ -677,17 +756,21 @@
     lastKey = q.key;
     current = q;
 
-    // 選択肢: 正解 + 近い数を 7つ（ぜんぶで 8つ）、小さい じゅんに ならべる
+    // 選択肢: 正解 + 近い数を 7つ（ぜんぶで 8つ）、小さい じゅんに ならべる（とけいは もう できている）
     const ok = x => x >= 0 && x <= q.max;
-    const opts = [q.answer];
-    for (let d = 1; opts.length < 8 && d <= 20; d++) {
+    const opts = q.choices ? [...q.choices] : [q.answer];
+    for (let d = 1; !q.choices && opts.length < 8 && d <= 20; d++) {
       for (const x of shuffle([q.answer - d, q.answer + d].filter(ok))) {
         if (opts.length < 8) opts.push(x);
       }
     }
-    opts.sort((a, b) => a - b);
+    if (!q.choices) opts.sort((a, b) => a - b);
 
     renderEquation(q.parts);
+    equationEl.classList.toggle('clock-answer', !!q.clock);
+    choicesEl.classList.toggle('wide', !!q.clock);
+    $('clockBox').innerHTML = '';
+    if (q.clock) $('clockBox').appendChild(drawClock(...q.clock));
     frameEl.hidden = q.dots === null;
     if (q.dots !== null) renderFrame(q.dots, false);
     msgEl.textContent = q.prompt;
@@ -743,7 +826,7 @@
     level--;
     choicesEl.querySelectorAll('button').forEach(b => {
       b.disabled = true;
-      if (+b.textContent === current.answer) b.classList.add('reveal');
+      if (b.textContent === String(current.answer)) b.classList.add('reveal');
     });
     blankEl.textContent = current.answer;
     msgEl.textContent = `こたえは ${current.answer}。レベル${level}に さがったよ`;
