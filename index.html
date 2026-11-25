@@ -300,7 +300,7 @@
     position: absolute; left: 50%; top: 50%; width: 130px; height: 130px; margin: -65px 0 0 -65px;
     display: grid; place-items: center; font-size: 100px; line-height: 1; transform: scale(0);
   }
-  .capsule .prize img { width: 100%; height: 100%; object-fit: contain; }
+  .capsule .prize img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; } /* たて長の がぞうも はみださない */
   .capsule.drop { animation: drop .8s cubic-bezier(.3, 1.4, .5, 1); }
   @keyframes drop { 0% { transform: translateY(-60px) scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: none; } }
   .capsule.ready { animation: wiggle 1s ease-in-out infinite; }
@@ -601,8 +601,17 @@
   }
 
   // ---------- シール ----------
-  // stickers/ フォルダに画像があればそれを使い、なければ絵文字を使う
-  const EMOJI_STICKERS = ['🐶','🐱','🐰','🐼','🐨','🦁','🐸','🐧','🐥','🦄','🐳','🐬','🦋','🐞','🌻','🌈','🍓','🍩','🍦','🚀','🚂','🚗','⚽','🎈','🎁','👑','💎','🌟','🍀','🦖'];
+  // シールは stickers/ フォルダの がぞう ＋ えもじ（がぞうが ないときは えもじだけ）
+  // えもじの シール（レア度1 = いちばん でやすい）。stickers/ の がぞうと まぜて つかう
+  const EMOJI_STICKERS = [
+    '🐶','🐱','🐰','🐼','🐨','🦁','🐸','🐧','🐥','🦄','🐳','🐬','🦋','🐞','🌻','🌈','🍓','🍩','🍦','🚀',
+    '🚂','🚗','⚽','🎈','🎁','👑','💎','🌟','🍀','🦖','🐻','🐯','🐮','🐷','🐵','🐔','🐤','🦊','🐹','🐭',
+    '🐺','🐗','🐴','🐝','🐛','🐌','🐢','🐍','🦕','🐙','🦑','🦀','🐠','🐟','🐡','🦈','🐊','🦒','🐘','🦛',
+    '🦏','🐪','🦘','🦔','🦉','🦅','🦆','🦢','🦩','🦜','🦦','🦥','🍎','🍊','🍋','🍌','🍉','🍇','🍒','🍑',
+    '🍍','🥝','🥕','🌽','🍄','🍞','🧀','🍙','🍣','🍔','🍕','🍟','🍪','🎂','🍰','🍫','🍬','🍭','🧁','🍮',
+    '🍡','🌸','🌷','🌹','🌺','🌼','🍁','🌵','🌴','🌙','⭐','🌞','⛄','🔥','💧','⚡','🚁','⛵','🚲','🚌',
+    '🚒','🚓','🚑','🚜','🏀','⚾','🎾','🎨','🎹','🥁',
+  ];
   let STICKERS = EMOJI_STICKERS;
   const STICKER_DIR = 'stickers/';
   const STORE_KEY = 'make10.stickers';
@@ -643,7 +652,7 @@
 
   async function loadStickerImages() {
     const files = await listImages('stickers', 'stickers.json');
-    if (files.length) STICKERS = files.map(f => 'img:' + f);
+    if (files.length) STICKERS = [...files.map(f => 'img:' + f), ...EMOJI_STICKERS]; // がぞう ＋ えもじ
   }
 
   // シール1まいを要素に表示する（画像なら <img>、絵文字ならそのまま）
@@ -651,10 +660,10 @@
     el.textContent = '';
     if (s.startsWith('img:')) {
       const img = document.createElement('img');
-      img.src = STICKER_DIR + encodeURIComponent(s.slice(4));
       img.alt = 'シール';
-      // ちいさい ドット絵は ぼやけないように くっきり
-      img.onload = () => { if (Math.max(img.naturalWidth, img.naturalHeight) <= 64) img.style.imageRendering = 'pixelated'; };
+      // ちいさい ドット絵（128ピクセルまで）は ぼやけないように くっきり
+      img.onload = () => { if (Math.max(img.naturalWidth, img.naturalHeight) <= 128) img.style.imageRendering = 'pixelated'; };
+      img.src = STICKER_DIR + encodeURIComponent(s.slice(4));
       el.appendChild(img);
     } else {
       el.textContent = s;
