@@ -145,6 +145,13 @@
   .sticker-big img { width: 160px; height: 160px; max-width: 100%; object-fit: contain; display: block; margin: 0 auto; }
   .book div { overflow: hidden; }
   .book div img { width: 85%; height: 85%; object-fit: contain; }
+  .book-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; margin-top: 12px; }
+  .book-summary .item {
+    display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px;
+    border-radius: 14px; background: var(--track); font-size: 13px; font-weight: 700;
+  }
+  .book-summary .item b { font-size: 18px; }
+  .book-summary .item .icon { font-size: 20px; line-height: 1; }
   .book div.empty { color: var(--muted); font-size: 20px; }
   button:focus-visible { outline: 4px solid var(--accent); outline-offset: 3px; }
   @media (prefers-reduced-motion: reduce) {
@@ -363,6 +370,7 @@
   <div class="panel">
     <h2>📒 シールちょう</h2>
     <div class="sub" id="bookInfo"></div>
+    <div class="book-summary" id="bookSummary"></div>
     <div class="book" id="book"></div>
     <div class="reward-actions">
       <button class="primary" id="closeBook">とじる</button>
@@ -1134,6 +1142,23 @@
     $('bookInfo').textContent = stickers.length
       ? `${stickers.length}まい あつめたよ！`
       : 'まだ シールが ないよ。10かい せいかいすると もらえるよ！';
+    // しゅるいごとの まいすう（もんだい / カレンダーの ボーナス / かぞえはじめる まえの ぶん）
+    const sum = $('bookSummary');
+    sum.innerHTML = '';
+    const rows = Object.entries(KINDS).map(([id, k]) => [k.icon, k.label, kindCount(id)]);
+    const bonusTotal = Object.values(bonus).reduce((a, b) => a + b, 0);
+    rows.push(['📅', 'ボーナス', bonusTotal]);
+    const counted = rows.reduce((a, r) => a + r[2], 0);
+    if (stickers.length > counted) rows.push(['📦', 'まえから', stickers.length - counted]);
+    if (stickers.length) for (const [icon, label, n] of rows) {
+      const d = document.createElement('div');
+      d.className = 'item';
+      d.innerHTML = '<span class="icon"></span><span></span><b></b>';
+      d.children[0].textContent = icon;
+      d.children[1].textContent = label;
+      d.children[2].textContent = `${n}まい`;
+      sum.appendChild(d);
+    }
     $('bookTopBtn').hidden = !$('menu').hidden; // トップにいるときは いらない
     $('bookOverlay').classList.add('show');
   }
