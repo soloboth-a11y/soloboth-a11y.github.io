@@ -1,0 +1,34 @@
+rules_version = '2';
+
+// シールあつめ の Firestore ルール
+// Firebase コンソール → Firestore Database → ルール に はりつけて「公開」する。
+//
+// - データは users/{なまえ} の 1ドキュメントに まとめて ほぞんする
+// - なまえを しっている ときだけ よめる（なまえの 一覧は とれない）
+// - アプリが つかう かたちの データだけ かきこめる
+// - けすことは できない
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidUser(name) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'stickers', 'log', 'bonus', 'kind', 'byLevel', 'updatedAt'])
+        && d.keys().hasAll(['name', 'stickers', 'updatedAt'])
+        && d.name == name
+        && name.size() >= 1 && name.size() <= 20
+        && d.stickers is list && d.stickers.size() <= 20000
+        && (!('log' in d) || d.log is map)
+        && (!('bonus' in d) || d.bonus is map)
+        && (!('byLevel' in d) || d.byLevel is map)
+        && (!('kind' in d) || (d.kind is string && d.kind.size() <= 20))
+        && d.updatedAt is timestamp;
+    }
+
+    match /users/{name} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if isValidUser(name);
+      allow delete: if false;
+    }
+  }
+}
