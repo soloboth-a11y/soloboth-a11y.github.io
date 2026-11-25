@@ -1,6 +1,7 @@
 # サイトを GitHub Pages に公開する。
-# 公開の前に stickers/ フォルダの画像一覧（stickers.json）を作るので、
-# 画像を入れてプッシュするだけでシールに加わる。
+# 公開の前に stickers/ と sprites/ フォルダの画像一覧を作るので、
+# 画像を入れてプッシュするだけでシールや アニメーションに加わる。
+# GitHub の おすすめの かたちに あわせて「つくる（build）」と「公開する（deploy）」を わけている。
 name: Publish site
 
 on:
@@ -14,16 +15,13 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     # 既定ブランチへのプッシュ（または手動実行）のときだけ公開する
     if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,8 +35,16 @@ jobs:
           cp index.html _site/
           cp -r stickers sprites _site/
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
