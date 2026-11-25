@@ -250,6 +250,20 @@
   button.day.claim .n { color: var(--on-accent); }
   @keyframes wiggle { 0%, 100% { transform: rotate(0); } 10% { transform: rotate(-6deg); } 20% { transform: rotate(6deg); } 30% { transform: rotate(0); } }
 
+  /* login */
+  .login-panel { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .login-panel form { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+  .login-panel input {
+    width: 100%; max-width: 280px; font: inherit; font-size: 24px; font-weight: 800; text-align: center;
+    color: var(--ink); background: var(--bg); border: 3px solid var(--shadow); border-radius: 18px; padding: 12px;
+  }
+  .login-panel input:focus { outline: none; border-color: var(--accent); }
+  .login-note { font-size: 15px; font-weight: 700; color: var(--good); }
+  .login-error { font-size: 15px; font-weight: 700; color: var(--bad); min-height: 1.2em; }
+  .user-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 700; }
+  .user-row .sync { font-size: 13px; color: var(--sub); font-weight: 400; }
+  .user-row .secondary { margin-top: 0; font-size: 14px; padding: 6px 14px; box-shadow: 0 3px 0 var(--shadow); }
+
   .reload-row { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; text-align: center; }
   .reload-row .sub { font-size: 13px; }
   .secondary:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--shadow); }
@@ -293,6 +307,11 @@
     <button class="secondary" id="reloadBtn"><span class="spin">🔄</span> <span id="reloadLabel">さいよみこみ</span></button>
     <div class="sub">あたらしい シールや もんだいを よみこみます。あつめた シールは きえません。</div>
   </div>
+  <div class="user-row">
+    <span>👤 <span id="userName"></span></span>
+    <span class="sync" id="syncStatus"></span>
+    <button class="secondary" id="logoutBtn">ログアウト</button>
+  </div>
 </main>
 
 <main id="game" hidden>
@@ -312,7 +331,7 @@
 
 <div class="overlay" id="rewardOverlay">
   <div class="panel">
-    <h2>花ちゃん、<br><span id="rewardTitle">10かい せいかい！</span></h2>
+    <h2><span id="rewardName"></span>、<br><span id="rewardTitle">10かい せいかい！</span></h2>
     <div class="sub" id="rewardInfo">シールを もらったよ</div>
     <div class="reward-stickers" id="rewardStickers"></div>
     <div class="reward-actions">
@@ -345,6 +364,19 @@
       <button class="primary" id="closeBook">とじる</button>
       <button class="secondary" id="bookTopBtn">🏠 トップに もどる</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="loginOverlay">
+  <div class="panel login-panel">
+    <h2>シールあつめ</h2>
+    <div class="sub">なまえを いれてね</div>
+    <form id="loginForm" autocomplete="off">
+      <input id="loginName" maxlength="20" placeholder="れい: はなちゃん" aria-label="なまえ">
+      <div class="login-note" id="loginNote" hidden></div>
+      <div class="login-error" id="loginError"></div>
+      <button class="primary" id="loginBtn" type="submit">はじめる</button>
+    </form>
   </div>
 </div>
 
@@ -557,6 +589,7 @@
   }
   function save(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+    if (SYNC_KEYS.includes(key)) scheduleCloudSave();   // クラウドにも ほぞん
   }
   let stickers = load(STORE_KEY, []);
   function updateCount() { $('stickerCount').textContent = stickers.length; }
@@ -788,9 +821,8 @@
   }
 
   // ときどき（3回に1回くらい）名前をつける
-  const NAME = '花ちゃん';
   function withName(text) {
-    return Math.random() < 1 / 3 ? `${NAME}、${text}` : text;
+    return user && Math.random() < 1 / 3 ? `${user}、${text}` : text;
   }
 
   function choose(btn, v) {
@@ -1096,10 +1128,191 @@
   $('bookBtn').addEventListener('click', openBook);
   $('closeBook').addEventListener('click', () => $('bookOverlay').classList.remove('show'));
 
+  // ---------- ログインと クラウド ほぞん（Firebase Firestore） ----------
+  // データは Firestore の users/{なまえ} に ほぞんする。ブラウザにも コピーを おいておき、
+  // つながらない ときも あそべるように している。
+  const FIREBASE = { apiKey: 'AIzaSyCdVNAU_JfY1xAsn853z1tSH45tY_sE6U8', projectId: 'count-1106d' };
+  const USER_KEY = 'make10.user';
+  const DIRTY_KEY = 'make10.dirty'; // まだ クラウドに おくれていない かわりが ある
+  const SYNC_KEYS = [STORE_KEY, LOG_KEY, BONUS_KEY, KIND_KEY];
+  let user = load(USER_KEY, null);
+  let synced = false;        // クラウドの データを 1かい よみこんだら true（それまでは うわがきしない）
+  let saveTimer = null, applying = false;
+
+  const docUrl = name => `https://firestore.googleapis.com/v1/projects/${FIREBASE.projectId}/databases/(default)/documents/users/${encodeURIComponent(name)}?key=${FIREBASE.apiKey}`;
+
+  // JavaScript の あたい ⇔ Firestore REST の あたい
+  function toFs(v) {
+    if (v === null || v === undefined) return { nullValue: null };
+    if (typeof v === 'boolean') return { booleanValue: v };
+    if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+    if (typeof v === 'string') return { stringValue: v };
+    if (v instanceof Date) return { timestampValue: v.toISOString() };
+    if (Array.isArray(v)) return { arrayValue: v.length ? { values: v.map(toFs) } : {} };
+    const fields = {};
+    for (const k in v) fields[k] = toFs(v[k]);
+    return { mapValue: { fields } };
+  }
+  function fromFs(v) {
+    if ('nullValue' in v) return null;
+    if ('booleanValue' in v) return v.booleanValue;
+    if ('integerValue' in v) return Number(v.integerValue);
+    if ('doubleValue' in v) return v.doubleValue;
+    if ('stringValue' in v) return v.stringValue;
+    if ('timestampValue' in v) return v.timestampValue;
+    if ('arrayValue' in v) return (v.arrayValue.values || []).map(fromFs);
+    if ('mapValue' in v) { const o = {}; const f = v.mapValue.fields || {}; for (const k in f) o[k] = fromFs(f[k]); return o; }
+    return null;
+  }
+
+  function setSync(text) { $('syncStatus').textContent = text; }
+
+  // クラウドの データを よむ。ない ときは null、つながらない ときは エラー
+  async function cloudGet(name) {
+    const res = await fetch(docUrl(name), { cache: 'no-store' });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('get ' + res.status);
+    const doc = await res.json();
+    const f = doc.fields || {};
+    return {
+      stickers: f.stickers ? fromFs(f.stickers) : [],
+      log: f.log ? fromFs(f.log) : {},
+      bonus: f.bonus ? fromFs(f.bonus) : {},
+      kind: f.kind ? fromFs(f.kind) : null,
+    };
+  }
+
+  async function cloudPut(keepalive = false) {
+    const body = { fields: toFs({ name: user, stickers, log, bonus, kind, updatedAt: new Date() }).mapValue.fields };
+    const res = await fetch(docUrl(user), { method: 'PATCH', keepalive, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error('put ' + res.status);
+    try { localStorage.removeItem(DIRTY_KEY); } catch {}
+  }
+  const isDirty = () => { try { return !!localStorage.getItem(DIRTY_KEY); } catch { return false; } };
+
+  function scheduleCloudSave() {
+    if (!user || applying) return;
+    try { localStorage.setItem(DIRTY_KEY, '1'); } catch {}
+    clearTimeout(saveTimer);
+    setSync('☁️ ほぞんちゅう…');
+    saveTimer = setTimeout(flushCloudSave, 600);
+  }
+  async function flushCloudSave() {
+    clearTimeout(saveTimer); saveTimer = null;
+    if (!user) return;
+    try {
+      if (!synced) await syncFromCloud();   // まだ クラウドを よんでいない ときは さきに よむ
+      await cloudPut();
+      setSync('☁️ ほぞんずみ');
+    } catch {
+      setSync('⚠️ ほぞんできませんでした（つながったら また ほぞんします）');
+    }
+  }
+
+  // クラウドの データを ブラウザに いれる
+  function applyData(d) {
+    applying = true;
+    stickers = d.stickers; log = d.log; bonus = d.bonus;
+    if (d.kind && KINDS[d.kind]) kind = d.kind;
+    save(STORE_KEY, stickers); save(LOG_KEY, log); save(BONUS_KEY, bonus); save(KIND_KEY, kind);
+    applying = false;
+    updateCount();
+    if (!$('menu').hidden) renderMenu();
+  }
+
+  // ログインまえに あつめた シールを、クラウドの データに くわえる
+  function mergeInto(remote, local) {
+    const out = { stickers: [...remote.stickers, ...local.stickers], log: { ...remote.log }, bonus: { ...remote.bonus, ...local.bonus }, kind: remote.kind || local.kind };
+    for (const k in local.log) out.log[k] = (out.log[k] || 0) + local.log[k];
+    return out;
+  }
+
+  // ログイン ちゅう: クラウドが ただしい データ。（ログインした ときだけ、まえの データを まぜる）
+  async function syncFromCloud(mergeLocal = false) {
+    const remote = await cloudGet(user);
+    const local = { stickers, log, bonus, kind };
+    const keepLocal = !mergeLocal && isDirty();   // まだ おくれていない あたらしい データが ある
+    if (remote && !keepLocal) applyData(mergeLocal ? mergeInto(remote, local) : remote);
+    synced = true;
+    if (!remote || mergeLocal || keepLocal) await cloudPut();
+    setSync('☁️ ほぞんずみ');
+  }
+
+  function showUser() {
+    $('userName').textContent = user || '';
+    $('rewardName').textContent = user || '';
+  }
+
+  function showLogin() {
+    const n = stickers.length;
+    $('loginNote').hidden = n === 0;
+    $('loginNote').textContent = `いまの シール ${n}まいは そのまま つかえるよ`;
+    $('loginError').textContent = '';
+    $('loginOverlay').classList.add('show');
+    setTimeout(() => $('loginName').focus(), 50);
+  }
+
+  $('loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = $('loginName').value.trim();
+    if (!name) { $('loginError').textContent = 'なまえを いれてね'; return; }
+    if (name.includes('/') || name === '.' || name === '..' || /^__.*__$/.test(name)) {
+      $('loginError').textContent = 'この なまえは つかえないよ'; return;
+    }
+    $('loginBtn').disabled = true;
+    $('loginError').textContent = '';
+    user = name;
+    save(USER_KEY, user);
+    showUser();
+    synced = false;
+    try {
+      await syncFromCloud(true);
+    } catch {
+      setSync('⚠️ つながっていません（あとで ほぞんします）');
+    }
+    $('loginBtn').disabled = false;
+    $('loginOverlay').classList.remove('show');
+    $('loginName').value = '';
+  });
+
+  // ログアウト: 2かい おしたら。データは クラウドに のこして、ブラウザからは けす
+  let logoutArmed = 0;
+  $('logoutBtn').addEventListener('click', async () => {
+    if (Date.now() - logoutArmed > 3000) {
+      logoutArmed = Date.now();
+      $('logoutBtn').textContent = 'もういちど おすと ログアウト';
+      setTimeout(() => { $('logoutBtn').textContent = 'ログアウト'; }, 3000);
+      return;
+    }
+    $('logoutBtn').disabled = true;
+    try { await flushCloudSave(); } catch {}
+    applying = true;
+    stickers = []; log = {}; bonus = {};
+    save(STORE_KEY, stickers); save(LOG_KEY, log); save(BONUS_KEY, bonus);
+    applying = false;
+    try { localStorage.removeItem(USER_KEY); localStorage.removeItem(DIRTY_KEY); } catch {}
+    user = null; synced = false;
+    $('logoutBtn').disabled = false;
+    $('logoutBtn').textContent = 'ログアウト';
+    showUser(); updateCount(); setSync('');
+    showMenu();
+    showLogin();
+  });
+
+  // アプリを とじる ときや べつの アプリに うつる ときは すぐ ほぞん。もどってきたら クラウドを よみなおす
+  addEventListener('pagehide', () => { if (saveTimer && user && synced) { clearTimeout(saveTimer); cloudPut(true).catch(() => {}); } });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && saveTimer) flushCloudSave();
+    else if (document.visibilityState === 'visible' && user && !saveTimer) syncFromCloud().catch(() => {});
+  });
+
   const savedKind = load(KIND_KEY, 'make10');
   if (KINDS[savedKind]) kind = savedKind;
   updateCount();
   showMenu();
+  showUser();
+  if (user) syncFromCloud().catch(() => setSync('⚠️ つながっていません'));
+  else showLogin();
   loadStickerImages();
   loadSprites();
 })();
