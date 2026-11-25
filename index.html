@@ -202,6 +202,8 @@
   .level .desc { font-size: 13px; color: var(--sub); }
   .level .reward { font-size: 12px; color: var(--sub); text-align: center; white-space: nowrap; }
   .level .reward span { display: block; font-size: 16px; letter-spacing: -2px; }
+  .level .reward .got { font-size: 12px; letter-spacing: 0; color: var(--ink); font-weight: 800; margin-top: 2px; }
+  .kind small { font-size: 11px; font-weight: 700; opacity: .85; }
 
   .equation { flex-wrap: wrap; }
   .equation.long { font-size: clamp(28px, 8.5vw, 56px); gap: .18em; }
@@ -527,6 +529,7 @@
   const STORE_KEY = 'make10.stickers';
   const KIND_KEY = 'make10.kind';
   const LOG_KEY = 'make10.log';       // { 'YYYY-MM-DD': その日に もんだいで もらった まいすう }
+  const BYLEVEL_KEY = 'make10.byLevel'; // { 'add-2': たしざん レベル2 で もらった まいすう }
   const BONUS_KEY = 'make10.bonus';   // { 'YYYY-MM-DD': れんぞくボーナスで もらった まいすう }
 
   // フォルダの 画像の 一覧を とってくる。
@@ -594,6 +597,9 @@
     if (SYNC_KEYS.includes(key)) scheduleCloudSave();   // クラウドにも ほぞん
   }
   let stickers = load(STORE_KEY, []);
+  let byLevel = load(BYLEVEL_KEY, {});
+  const levelCount = (k, n) => byLevel[`${k}-${n}`] || 0;
+  const kindCount = k => KINDS[k].levels.reduce((t, _, i) => t + levelCount(k, i + 1), 0);
   function updateCount() { $('stickerCount').textContent = stickers.length; }
 
   // ---------- sound ----------
@@ -692,9 +698,10 @@
       const b = document.createElement('button');
       b.className = 'kind';
       b.setAttribute('aria-pressed', id === kind);
-      b.innerHTML = `<b></b><span></span>`;
+      b.innerHTML = `<b></b><span></span><small></small>`;
       b.querySelector('b').textContent = k.icon;
       b.querySelector('span').textContent = k.short || k.label;
+      b.querySelector('small').textContent = `🏅${kindCount(id)}まい`;
       b.addEventListener('click', () => { kind = id; save(KIND_KEY, id); renderMenu(); });
       kindsEl.appendChild(b);
     }
@@ -705,7 +712,7 @@
       b.className = 'level';
       b.innerHTML = `<div class="lv">レベル${n}</div>
         <div class="body"><div class="ex"></div><div class="desc"></div></div>
-        <div class="reward">シール<span>${'⭐'.repeat(n)}</span></div>`;
+        <div class="reward">シール<span>${'⭐'.repeat(n)}</span><span class="got">🏅${levelCount(kind, n)}まい</span></div>`;
       b.querySelector('.ex').textContent = lv.ex;
       b.querySelector('.desc').textContent = lv.desc;
       b.addEventListener('click', () => startGame(kind, n));
@@ -933,6 +940,9 @@
     const key = dayKey(new Date());
     log[key] = (log[key] || 0) + count;
     save(LOG_KEY, log);
+    const lk = `${kind}-${level}`;              // おわったときの レベルで かぞえる
+    byLevel[lk] = (byLevel[lk] || 0) + count;
+    save(BYLEVEL_KEY, byLevel);
     showReward(got, '10かい せいかい！', count < startLevel
       ? `レベル${startLevel}から レベル${count}に さがったので、シールは ${count}まい`
       : `シールを ${count}まい もらったよ`, 'game');
@@ -1136,7 +1146,7 @@
   const FIREBASE = { apiKey: 'AIzaSyCdVNAU_JfY1xAsn853z1tSH45tY_sE6U8', projectId: 'count-1106d' };
   const USER_KEY = 'make10.user';
   const DIRTY_KEY = 'make10.dirty'; // まだ クラウドに おくれていない かわりが ある
-  const SYNC_KEYS = [STORE_KEY, LOG_KEY, BONUS_KEY, KIND_KEY];
+  const SYNC_KEYS = [STORE_KEY, LOG_KEY, BONUS_KEY, KIND_KEY, BYLEVEL_KEY];
   let user = load(USER_KEY, null);
   let synced = false;        // クラウドの データを 1かい よみこんだら true（それまでは うわがきしない）
   let saveTimer = null, applying = false;
@@ -1181,11 +1191,12 @@
       log: f.log ? fromFs(f.log) : {},
       bonus: f.bonus ? fromFs(f.bonus) : {},
       kind: f.kind ? fromFs(f.kind) : null,
+      byLevel: f.byLevel ? fromFs(f.byLevel) : {},
     };
   }
 
   async function cloudPut(keepalive = false) {
-    const body = { fields: toFs({ name: user, stickers, log, bonus, kind, updatedAt: new Date() }).mapValue.fields };
+    const body = { fields: toFs({ name: user, stickers, log, bonus, kind, byLevel, updatedAt: new Date() }).mapValue.fields };
     const res = await fetch(docUrl(user), { method: 'PATCH', keepalive, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!res.ok) throw new Error('put ' + res.status);
     try { localStorage.removeItem(DIRTY_KEY); } catch {}
@@ -1214,9 +1225,9 @@
   // クラウドの データを ブラウザに いれる
   function applyData(d) {
     applying = true;
-    stickers = d.stickers; log = d.log; bonus = d.bonus;
+    stickers = d.stickers; log = d.log; bonus = d.bonus; byLevel = d.byLevel || {};
     if (d.kind && KINDS[d.kind]) kind = d.kind;
-    save(STORE_KEY, stickers); save(LOG_KEY, log); save(BONUS_KEY, bonus); save(KIND_KEY, kind);
+    save(STORE_KEY, stickers); save(LOG_KEY, log); save(BONUS_KEY, bonus); save(KIND_KEY, kind); save(BYLEVEL_KEY, byLevel);
     applying = false;
     updateCount();
     if (!$('menu').hidden) renderMenu();
@@ -1226,13 +1237,15 @@
   function mergeInto(remote, local) {
     const out = { stickers: [...remote.stickers, ...local.stickers], log: { ...remote.log }, bonus: { ...remote.bonus, ...local.bonus }, kind: remote.kind || local.kind };
     for (const k in local.log) out.log[k] = (out.log[k] || 0) + local.log[k];
+    out.byLevel = { ...(remote.byLevel || {}) };
+    for (const k in local.byLevel) out.byLevel[k] = (out.byLevel[k] || 0) + local.byLevel[k];
     return out;
   }
 
   // ログイン ちゅう: クラウドが ただしい データ。（ログインした ときだけ、まえの データを まぜる）
   async function syncFromCloud(mergeLocal = false) {
     const remote = await cloudGet(user);
-    const local = { stickers, log, bonus, kind };
+    const local = { stickers, log, bonus, kind, byLevel };
     const keepLocal = !mergeLocal && isDirty();   // まだ おくれていない あたらしい データが ある
     if (remote && !keepLocal) applyData(mergeLocal ? mergeInto(remote, local) : remote);
     synced = true;
@@ -1301,8 +1314,8 @@
     $('logoutBtn').disabled = true;
     try { await flushCloudSave(); } catch {}
     applying = true;
-    stickers = []; log = {}; bonus = {};
-    save(STORE_KEY, stickers); save(LOG_KEY, log); save(BONUS_KEY, bonus);
+    stickers = []; log = {}; bonus = {}; byLevel = {};
+    save(STORE_KEY, stickers); save(LOG_KEY, log); save(BONUS_KEY, bonus); save(BYLEVEL_KEY, byLevel);
     applying = false;
     try { localStorage.removeItem(USER_KEY); localStorage.removeItem(DIRTY_KEY); } catch {}
     user = null; synced = false;
