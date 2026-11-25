@@ -143,8 +143,9 @@
     display: grid; place-items: center; font-size: 34px;
   }
   .sticker-big img { width: 160px; height: 160px; max-width: 100%; object-fit: contain; display: block; margin: 0 auto; }
-  .book div { overflow: hidden; }
-  .book div img { width: 85%; height: 85%; object-fit: contain; }
+  .book div { overflow: hidden; position: relative; }
+  /* がぞうの ぜんぶが ますの なかに はいるように（たて長・よこ長でも） */
+  .book div img { position: absolute; inset: 0; margin: auto; width: 85%; height: 85%; object-fit: contain; }
   .book-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; margin-top: 12px; }
   .book-summary .item {
     display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px;
@@ -582,6 +583,8 @@
       const img = document.createElement('img');
       img.src = STICKER_DIR + encodeURIComponent(s.slice(4));
       img.alt = 'シール';
+      // ちいさい ドット絵は ぼやけないように くっきり
+      img.onload = () => { if (Math.max(img.naturalWidth, img.naturalHeight) <= 64) img.style.imageRendering = 'pixelated'; };
       el.appendChild(img);
     } else {
       el.textContent = s;
