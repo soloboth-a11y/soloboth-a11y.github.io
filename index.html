@@ -12,6 +12,7 @@
     --sub: #8a83a3;
     --accent: #ff8a5b;
     --accent-dark: #e86a3a;
+    --accent-soft: #ffe3d3;
     --good: #3cc47c;
     --good-dark: #2a9a5f;
     --good-soft: #e8fbf1;
@@ -30,7 +31,7 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #1f1b2e; --card: #2c2740; --ink: #f4efff; --sub: #a9a1c4;
-      --accent: #ff9a6e; --accent-dark: #c9592e; --good: #4fd68e; --good-dark: #2a9a5f;
+      --accent: #ff9a6e; --accent-dark: #c9592e; --accent-soft: #4a2c22; --good: #4fd68e; --good-dark: #2a9a5f;
       --good-soft: #1f3b2e; --bad: #ff7585; --bad-soft: #43242c; --dot: #ff9a6e;
       --dot-empty: #3a3452; --dot-line: #554d70; --track: #3a3452; --star: #c9a92e;
       --shadow: #151221; --on-accent: #ffffff; --muted: #5d5678; --scrim: rgba(0,0,0,.6);
@@ -39,7 +40,7 @@
   }
   :root[data-theme="dark"] {
     --bg: #1f1b2e; --card: #2c2740; --ink: #f4efff; --sub: #a9a1c4;
-    --accent: #ff9a6e; --accent-dark: #c9592e; --good: #4fd68e; --good-dark: #2a9a5f;
+    --accent: #ff9a6e; --accent-dark: #c9592e; --accent-soft: #4a2c22; --good: #4fd68e; --good-dark: #2a9a5f;
     --good-soft: #1f3b2e; --bad: #ff7585; --bad-soft: #43242c; --dot: #ff9a6e;
     --dot-empty: #3a3452; --dot-line: #554d70; --track: #3a3452; --star: #c9a92e;
     --shadow: #151221; --on-accent: #ffffff; --muted: #5d5678; --scrim: rgba(0,0,0,.6);
@@ -257,7 +258,8 @@
     width: 100%; max-width: 280px; font: inherit; font-size: 24px; font-weight: 800; text-align: center;
     color: var(--ink); background: var(--bg); border: 3px solid var(--shadow); border-radius: 18px; padding: 12px;
   }
-  .login-panel input:focus { outline: none; border-color: var(--accent); }
+  .login-panel input:focus { outline: none; border-color: var(--sub); }
+  .login-panel input.missing { border-color: var(--accent); background: var(--accent-soft); animation: shake .4s; }
   .login-note { font-size: 15px; font-weight: 700; color: var(--good); }
   .login-error { font-size: 15px; font-weight: 700; color: var(--bad); min-height: 1.2em; }
   .user-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 700; }
@@ -372,7 +374,7 @@
     <h2>シールあつめ</h2>
     <div class="sub">なまえを いれてね</div>
     <form id="loginForm" autocomplete="off">
-      <input id="loginName" maxlength="20" placeholder="れい: はなちゃん" aria-label="なまえ">
+      <input id="loginName" maxlength="20" aria-label="なまえ">
       <div class="login-note" id="loginNote" hidden></div>
       <div class="login-error" id="loginError"></div>
       <button class="primary" id="loginBtn" type="submit">はじめる</button>
@@ -1252,10 +1254,22 @@
     setTimeout(() => $('loginName').focus(), 50);
   }
 
+  $('loginName').addEventListener('input', () => {
+    $('loginName').classList.remove('missing');
+    $('loginError').textContent = '';
+  });
+
   $('loginForm').addEventListener('submit', async e => {
     e.preventDefault();
     const name = $('loginName').value.trim();
-    if (!name) { $('loginError').textContent = 'なまえを いれてね'; return; }
+    if (!name) {
+      $('loginName').classList.remove('missing');
+      void $('loginName').offsetWidth;            // もういちど ゆらすため
+      $('loginName').classList.add('missing');
+      $('loginError').textContent = 'なまえを いれてね';
+      $('loginName').focus();
+      return;
+    }
     if (name.includes('/') || name === '.' || name === '..' || /^__.*__$/.test(name)) {
       $('loginError').textContent = 'この なまえは つかえないよ'; return;
     }
