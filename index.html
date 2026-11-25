@@ -27,6 +27,8 @@
     --on-accent: #ffffff;
     --muted: #d6ccb4;
     --scrim: rgba(59, 51, 85, .55);
+    --cap-blue: #5b9dff;
+    --cap-pink: #ff6fae;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -259,6 +261,55 @@
     box-shadow: 0 3px 0 var(--accent-dark); animation: wiggle 1.2s ease-in-out infinite;
   }
   button.day.claim .n { color: var(--on-accent); }
+  /* gacha */
+  .gacha-panel { padding: 20px 12px; }
+  .gacha-count { font-size: 15px; font-weight: 800; color: var(--accent); }
+  .gacha { position: relative; width: 220px; height: 432px; margin: 6px auto 0; }
+  .gacha .dome {
+    position: absolute; left: 20px; top: 0; width: 180px; height: 180px; border-radius: 50%;
+    background: var(--bg); border: 6px solid var(--shadow); overflow: hidden;
+  }
+  .gacha .dome i { position: absolute; width: 42px; height: 42px; border-radius: 50%; border: 3px solid var(--card); }
+  .gacha .machine {
+    position: absolute; left: 0; top: 150px; width: 220px; height: 150px;
+    border-radius: 26px 26px 16px 16px; background: var(--accent); box-shadow: 0 6px 0 var(--accent-dark);
+  }
+  .gacha .knob {
+    position: absolute; left: 50%; top: 20px; width: 100px; height: 100px; margin-left: -50px; padding: 0;
+    border-radius: 50%; background: var(--card); border: 6px solid var(--accent-dark);
+    touch-action: none; cursor: grab;
+  }
+  .gacha .knob:active { cursor: grabbing; }
+  .gacha .knob .bar { position: absolute; left: 50%; top: 6px; bottom: 6px; width: 20px; margin-left: -10px; border-radius: 10px; background: var(--ink); }
+  .gacha .knob .bar::after { content: ""; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--star); } /* まわっているのが わかる めじるし */
+  .gacha .knob.hint { animation: nudge 1.6s ease-in-out infinite; }
+  @keyframes nudge { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(35deg); } }
+  .gacha .chute { position: absolute; left: 50%; bottom: 10px; width: 64px; height: 22px; margin-left: -32px; border-radius: 10px; background: var(--ink); }
+  .capsule {
+    position: absolute; left: 50%; top: 312px; width: 80px; height: 80px; margin-left: -40px;
+    border: none; background: none; padding: 0; cursor: pointer; --cap: var(--cap-blue);
+  }
+  .capsule .top, .capsule .bottom {
+    position: absolute; left: 0; width: 80px; height: 40px; border: 3px solid var(--ink);
+    transition: transform .5s ease, opacity .5s ease;
+  }
+  .capsule .top { top: 0; border-radius: 40px 40px 0 0; background: var(--cap); }
+  .capsule .bottom { bottom: 0; border-radius: 0 0 40px 40px; background: var(--card); }
+  .capsule.gold .top { background: var(--star); box-shadow: 0 0 22px var(--star); }
+  .capsule .prize {
+    position: absolute; left: 50%; top: 50%; width: 130px; height: 130px; margin: -65px 0 0 -65px;
+    display: grid; place-items: center; font-size: 100px; line-height: 1; transform: scale(0);
+  }
+  .capsule .prize img { width: 100%; height: 100%; object-fit: contain; }
+  .capsule.drop { animation: drop .8s cubic-bezier(.3, 1.4, .5, 1); }
+  @keyframes drop { 0% { transform: translateY(-60px) scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: none; } }
+  .capsule.ready { animation: wiggle 1s ease-in-out infinite; }
+  .capsule.open .top { transform: translate(-60px, -50px) rotate(-50deg); opacity: 0; }
+  .capsule.open .bottom { transform: translate(60px, 50px) rotate(40deg); opacity: 0; }
+  .capsule.open .prize { transform: scale(1); transition: transform .55s cubic-bezier(.2, 1.6, .4, 1) .15s; }
+  .gacha-hint { font-size: 17px; font-weight: 800; min-height: 1.4em; margin-top: 4px; }
+  .gacha-hint.rare { color: var(--accent); }
+
   @keyframes wiggle { 0%, 100% { transform: rotate(0); } 10% { transform: rotate(-6deg); } 20% { transform: rotate(6deg); } 30% { transform: rotate(0); } }
 
   /* login */
@@ -351,6 +402,25 @@
       <button class="secondary" id="menuBtn">🏠 トップに もどる</button>
       <button class="primary" id="calBackBtn" hidden>📅 カレンダーに もどる</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="gachaOverlay">
+  <div class="panel gacha-panel">
+    <h2>🎰 ガチャ</h2>
+    <div class="gacha-count" id="gachaCount"></div>
+    <div class="gacha">
+      <div class="dome" id="gachaDome" aria-hidden="true"></div>
+      <div class="machine">
+        <button class="knob" id="gachaKnob" aria-label="ハンドル。くるっと まわしてね"><span class="bar"></span></button>
+        <div class="chute"></div>
+      </div>
+      <button class="capsule" id="gachaCap" aria-label="カプセル。タップして あけてね" hidden>
+        <span class="top"></span><span class="bottom"></span><span class="prize" id="gachaPrize"></span>
+      </button>
+    </div>
+    <div class="gacha-hint" id="gachaHint"></div>
+    <button class="primary" id="gachaNext" hidden>つぎの ガチャ</button>
   </div>
 </div>
 
@@ -954,10 +1024,126 @@
     const lk = `${kind}-${level}`;              // おわったときの レベルで かぞえる
     byLevel[lk] = (byLevel[lk] || 0) + count;
     save(BYLEVEL_KEY, byLevel);
-    showReward(got, '10かい せいかい！', count < startLevel
+    playGacha(got, () => showReward(got, '10かい せいかい！', count < startLevel
       ? `レベル${startLevel}から レベル${count}に さがったので、シールは ${count}まい`
-      : `シールを ${count}まい もらったよ`, 'game');
+      : `シールを ${count}まい もらったよ`, 'game'));
   }
+
+  // ---------- ガチャ ----------
+  // もらう シールを 1まいずつ、ハンドルを ゆびで くるっと 1しゅう まわして だす → カプセルを タップして あける
+  const CAP_COLORS = ['var(--cap-blue)', 'var(--cap-pink)', 'var(--good)', 'var(--accent)'];
+  const gacha = { queue: [], index: 0, done: null, total: 0, last: 0, dragging: false, ticks: 0, dispensed: false, opened: false };
+
+  function fillDome() {
+    const dome = $('gachaDome');
+    dome.innerHTML = '';
+    for (let i = 0; i < 14; i++) {
+      const ball = document.createElement('i');
+      ball.style.left = (8 + (i % 4) * 38 + (Math.floor(i / 4) % 2) * 19) + 'px';
+      ball.style.top = (150 - 34 - Math.floor(i / 4) * 30) + 'px';
+      ball.style.background = CAP_COLORS[i % CAP_COLORS.length];
+      dome.appendChild(ball);
+    }
+  }
+
+  function playGacha(got, done) {
+    if (!got.length) return done();
+    Object.assign(gacha, { queue: got, index: 0, done });
+    fillDome();
+    $('gachaOverlay').classList.add('show');
+    resetGacha();
+  }
+
+  function resetGacha() {
+    Object.assign(gacha, { total: 0, dragging: false, ticks: 0, dispensed: false, opened: false });
+    const knob = $('gachaKnob'), cap = $('gachaCap');
+    knob.style.transform = '';
+    knob.classList.add('hint');
+    cap.hidden = true;
+    cap.className = 'capsule';
+    $('gachaPrize').innerHTML = '';
+    $('gachaCount').textContent = `${gacha.index + 1}まいめ ／ ${gacha.queue.length}まい`;
+    $('gachaHint').textContent = '↻ ハンドルを くるっと まわしてね';
+    $('gachaHint').className = 'gacha-hint';
+    $('gachaNext').hidden = true;
+    $('gachaOverlay').scrollTop = 0;
+  }
+
+  function knobAngle(e) {
+    const r = $('gachaKnob').getBoundingClientRect();
+    return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
+  }
+
+  function turnKnob(delta) {
+    gacha.total += delta;
+    const deg = gacha.total * 180 / Math.PI;
+    const knob = $('gachaKnob');
+    knob.classList.remove('hint');
+    knob.style.transform = `rotate(${deg}deg)`;
+    const ticks = Math.floor(Math.abs(deg) / 45);
+    if (ticks > gacha.ticks) { gacha.ticks = ticks; tone(500 + ticks * 60, 0, .05, 'square', .08); }  // カチカチ
+    if (Math.abs(deg) >= 360) dispense();
+  }
+
+  function dispense() {
+    if (gacha.dispensed) return;
+    gacha.dispensed = true;
+    gacha.dragging = false;
+    const s = gacha.queue[gacha.index];
+    const cap = $('gachaCap');
+    const rare = rarityOf(s) >= 3;
+    cap.className = 'capsule drop' + (rare ? ' gold' : '');
+    cap.style.setProperty('--cap', CAP_COLORS[rand(0, CAP_COLORS.length - 1)]);
+    showSticker($('gachaPrize'), s);
+    cap.hidden = false;
+    tone(330, 0, .12, 'triangle', .2); tone(250, .25, .12, 'triangle', .2);   // ゴロン
+    $('gachaHint').textContent = rare ? '✨ キラキラの カプセル！ タップして あけてね' : 'カプセルを タップして あけてね！';
+    $('gachaHint').className = 'gacha-hint' + (rare ? ' rare' : '');
+    setTimeout(() => { if (!gacha.opened) cap.classList.add('ready'); }, 800);
+  }
+
+  const knob = $('gachaKnob');
+  knob.addEventListener('pointerdown', e => {
+    if (gacha.dispensed) return;
+    e.preventDefault();
+    gacha.dragging = true;
+    gacha.last = knobAngle(e);
+    try { knob.setPointerCapture(e.pointerId); } catch {}
+  });
+  knob.addEventListener('pointermove', e => {
+    if (!gacha.dragging || gacha.dispensed) return;
+    const a = knobAngle(e);
+    let d = a - gacha.last;
+    if (d > Math.PI) d -= 2 * Math.PI;
+    if (d < -Math.PI) d += 2 * Math.PI;
+    gacha.last = a;
+    turnKnob(d);
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => knob.addEventListener(t, () => { gacha.dragging = false; }));
+  // キーボードでも まわせる（1かい 90ど）
+  knob.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!gacha.dispensed) turnKnob(Math.PI / 2); }
+  });
+
+  $('gachaCap').addEventListener('click', () => {
+    if (!gacha.dispensed || gacha.opened) return;
+    gacha.opened = true;
+    const cap = $('gachaCap');
+    cap.classList.remove('ready', 'drop');
+    cap.classList.add('open');
+    sfx.good();
+    const last = gacha.index >= gacha.queue.length - 1;
+    $('gachaHint').textContent = cap.classList.contains('gold') ? '✨ レアな シール！' : 'やったね！';
+    $('gachaNext').textContent = last ? 'シールを みる' : 'つぎの ガチャ';
+    setTimeout(() => { $('gachaNext').hidden = false; }, 500);
+  });
+
+  $('gachaNext').addEventListener('click', () => {
+    gacha.index++;
+    if (gacha.index < gacha.queue.length) return resetGacha();
+    $('gachaOverlay').classList.remove('show');
+    gacha.done();
+  });
 
   // ---------- calendar ----------
   let log = load(LOG_KEY, {}), bonus = load(BONUS_KEY, {});
@@ -1060,7 +1246,7 @@
     save(BONUS_KEY, bonus);
     $('calOverlay').classList.remove('show');
     const [, m, d] = key.split('-').map(Number);
-    showReward(got, `${streak}にち れんぞく！`, `${m}がつ${d}にちの ボーナスで シールを ${streak}まい もらったよ`, 'calendar');
+    playGacha(got, () => showReward(got, `${streak}にち れんぞく！`, `${m}がつ${d}にちの ボーナスで シールを ${streak}まい もらったよ`, 'calendar'));
   }
 
   $('calBtn').addEventListener('click', () => openCalendar(false));
